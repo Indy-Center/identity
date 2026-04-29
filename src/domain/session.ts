@@ -48,3 +48,24 @@ export async function deleteSessionByToken(db: DB, token: string): Promise<void>
 export async function deleteAllSessionsForUser(db: DB, userId: string): Promise<void> {
 	await db.delete(sessions).where(eq(sessions.userId, userId));
 }
+
+export async function validateSession(
+	db: DB,
+	token: string,
+	clock: Clock
+): Promise<Session | null> {
+	const row = await findSessionByToken(db, token);
+	if (!row) return null;
+	const now = clock.now();
+	if (row.expiresAt < now) {
+		await db.delete(sessions).where(eq(sessions.id, row.id));
+		return null;
+	}
+	const shouldRefresh = row.expiresAt - now < SESSION_REFRESH_THRESHOLD_MS;
+	const newExpiresAt = shouldRefresh ? now + SESSION_LIFETIME_MS : row.expiresAt;
+	await db
+		.update(sessions)
+		.set({ lastSeenAt: now, expiresAt: newExpiresAt })
+		.where(eq(sessions.id, row.id));
+	return { ...row, lastSeenAt: now, expiresAt: newExpiresAt };
+}
