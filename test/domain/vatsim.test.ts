@@ -12,16 +12,14 @@ describe('fetchVatsimProfile', () => {
 	});
 
 	it('returns parsed profile on 200', async () => {
-		const mockFetch = vi
-			.fn()
-			.mockResolvedValue(
-				new Response(
-					JSON.stringify({
-						data: { cid: '999', personal: { name_first: 'A', name_last: 'B', email: 'a@b.com' } }
-					}),
-					{ status: 200, headers: { 'content-type': 'application/json' } }
-				)
-			);
+		const mockFetch = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					data: { cid: '999', personal: { name_first: 'A', name_last: 'B', email: 'a@b.com' } }
+				}),
+				{ status: 200, headers: { 'content-type': 'application/json' } }
+			)
+		);
 		globalThis.fetch = mockFetch as any;
 
 		const profile = await fetchVatsimProfile('https://auth.vatsim.net', 'access_token_xyz');
