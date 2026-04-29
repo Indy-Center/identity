@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "identity",
   "main": "src/index.ts",
+  "account_id": "afd63515948c9b2188ce14ef1504b2c1",
   "compatibility_date": "2026-04-29",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
@@ -14,11 +15,14 @@
     {
       "binding": "DB",
       "database_name": "identity_db",
-      "database_id": "PLACEHOLDER_TO_BE_FILLED_BY_USER",
+      "database_id": "01e7c262-54ae-4107-895f-3b63a1f45b53",
       "migrations_dir": "src/db/migrations"
     }
   ],
   "services": [
     { "binding": "IDENTITY", "service": "identity" }
+  ],
+  "routes": [
+    { "pattern": "auth.flyindycenter.com", "custom_domain": true }
   ]
 }
