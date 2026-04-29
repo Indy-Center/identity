@@ -2,6 +2,7 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 import { buildApp } from './app';
 import * as users from './rpc/users';
 import * as sessions from './rpc/sessions';
+import * as roles from './rpc/roles';
 import type { Env } from './env';
 
 const app = buildApp();
@@ -29,5 +30,18 @@ export default class Identity extends WorkerEntrypoint<Env> {
 	}
 	invalidateUserSessions(userId: string) {
 		return sessions.invalidateAllForUser(this.env, userId);
+	}
+
+	addRole(userId: string, role: string, opts?: { grantedBy?: string }) {
+		return roles.add(this.env, userId, role, opts);
+	}
+	removeRole(userId: string, role: string) {
+		return roles.remove(this.env, userId, role);
+	}
+	setRoles(userId: string, list: string[], opts?: { grantedBy?: string }) {
+		return roles.set(this.env, userId, list, opts);
+	}
+	getRoles(userId: string) {
+		return roles.get(this.env, userId);
 	}
 }
