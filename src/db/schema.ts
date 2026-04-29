@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable(
 	'users',
@@ -41,3 +41,20 @@ export const sessions = sqliteTable(
 );
 
 export type Session = typeof sessions.$inferSelect;
+
+export const userRoles = sqliteTable(
+	'user_roles',
+	{
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		role: text('role').notNull(),
+		grantedAt: integer('granted_at').notNull(),
+		grantedBy: text('granted_by')
+	},
+	(t) => ({
+		pk: primaryKey({ columns: [t.userId, t.role] })
+	})
+);
+
+export type UserRole = typeof userRoles.$inferSelect;
