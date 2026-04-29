@@ -3,5 +3,13 @@
   "name": "identity",
   "main": "src/index.ts",
   "compatibility_date": "2026-04-29",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "identity_db",
+      "database_id": "PLACEHOLDER_TO_BE_FILLED_BY_USER",
+      "migrations_dir": "src/db/migrations"
+    }
+  ]
 }

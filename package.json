@@ -9,14 +9,18 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply identity_db --local"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.12.15"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.15.1",
     "@cloudflare/workers-types": "^4.20260426.1",
+    "drizzle-kit": "^0.31.10",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5",

@@ -1,5 +1,5 @@
 export type Env = {
-	// Filled in over subsequent tasks (D1 binding, secrets, vars).
+	DB: D1Database;
 };
 
 export type AppVariables = {

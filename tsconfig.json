@@ -14,5 +14,10 @@
     "types": [
       "@cloudflare/workers-types"
     ]
-  }
+  },
+  "exclude": [
+    "vitest.config.ts",
+    "drizzle.config.ts",
+    "node_modules"
+  ]
 }
