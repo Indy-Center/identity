@@ -4,6 +4,11 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-04-29",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "CONNECT_BASE_URL": "https://auth.vatsim.net",
+    "CONNECT_CALLBACK_URL": "https://auth.flyindycenter.com/login/callback",
+    "COOKIE_DOMAIN": ".flyindycenter.com"
+  },
   "d1_databases": [
     {
       "binding": "DB",

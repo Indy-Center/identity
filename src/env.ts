@@ -1,7 +1,10 @@
 export type Env = {
 	DB: D1Database;
+	CONNECT_CLIENT_ID: string;
+	CONNECT_CLIENT_SECRET: string;
+	CONNECT_BASE_URL: string;
+	CONNECT_CALLBACK_URL: string;
+	COOKIE_DOMAIN: string;
 };
 
-export type AppVariables = {
-	// Per-request context populated by middleware (e.g. logger child, request id).
-};
+export type AppVariables = {};
