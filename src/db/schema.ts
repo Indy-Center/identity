@@ -22,3 +22,22 @@ export const users = sqliteTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+export const sessions = sqliteTable(
+	'sessions',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		expiresAt: integer('expires_at').notNull(),
+		createdAt: integer('created_at').notNull(),
+		lastSeenAt: integer('last_seen_at').notNull()
+	},
+	(t) => ({
+		userIdx: index('idx_sessions_user').on(t.userId),
+		expiresIdx: index('idx_sessions_expires').on(t.expiresAt)
+	})
+);
+
+export type Session = typeof sessions.$inferSelect;

@@ -8,6 +8,13 @@
       "when": 1777425584107,
       "tag": "0000_panoramic_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777426023948,
+      "tag": "0001_sloppy_magik",
+      "breakpoints": true
     }
   ]
 }
