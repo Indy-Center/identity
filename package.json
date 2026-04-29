@@ -7,14 +7,19 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "hono": "^4.12.15"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.15.1",
+    "@cloudflare/workers-types": "^4.20260426.1",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.5",
     "wrangler": "^4.4.0"
   }
 }

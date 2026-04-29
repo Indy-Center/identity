@@ -1,9 +1,11 @@
-import { Hono } from 'hono';
+import { WorkerEntrypoint } from 'cloudflare:workers';
+import { buildApp } from './app';
+import type { Env } from './env';
 
-const app = new Hono();
+const app = buildApp();
 
-app.get('/', (c) => {
-	return c.text('Hello Hono!');
-});
-
-export default app;
+export default class Identity extends WorkerEntrypoint<Env> {
+	fetch(request: Request) {
+		return app.fetch(request, this.env, this.ctx);
+	}
+}
