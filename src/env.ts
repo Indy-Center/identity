@@ -5,6 +5,7 @@ export type Env = {
 	CONNECT_BASE_URL: string;
 	CONNECT_CALLBACK_URL: string;
 	COOKIE_DOMAIN: string;
+	COOKIE_SECURE: string;
 };
 
 export type AppVariables = {};

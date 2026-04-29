@@ -8,7 +8,7 @@ import {
 
 describe('buildSessionSetCookie', () => {
 	it('sets HttpOnly Secure SameSite=Lax on .flyindycenter.com', () => {
-		const v = buildSessionSetCookie('rawtoken', '.flyindycenter.com');
+		const v = buildSessionSetCookie('rawtoken', { domain: '.flyindycenter.com', secure: true });
 		expect(v).toContain('fic_session=rawtoken');
 		expect(v).toContain('Domain=.flyindycenter.com');
 		expect(v).toContain('HttpOnly');
@@ -17,14 +17,37 @@ describe('buildSessionSetCookie', () => {
 		expect(v).toContain('Path=/');
 		expect(v).toMatch(/Max-Age=\d+/);
 	});
+
+	it('omits Secure when secure=false (localhost dev)', () => {
+		const v = buildSessionSetCookie('rawtoken', { domain: null, secure: false });
+		expect(v).toContain('fic_session=rawtoken');
+		expect(v).not.toContain('Secure');
+		expect(v).toContain('HttpOnly');
+		expect(v).toContain('SameSite=Lax');
+	});
+
+	it('omits Domain when domain=null (host-only cookie)', () => {
+		const v = buildSessionSetCookie('rawtoken', { domain: null, secure: true });
+		expect(v).not.toContain('Domain=');
+		expect(v).toContain('Secure');
+	});
 });
 
 describe('buildSessionClearCookie', () => {
 	it('emits Max-Age=0 on the same domain', () => {
-		const v = buildSessionClearCookie('.flyindycenter.com');
+		const v = buildSessionClearCookie({ domain: '.flyindycenter.com', secure: true });
 		expect(v).toContain('fic_session=');
 		expect(v).toContain('Max-Age=0');
 		expect(v).toContain('Domain=.flyindycenter.com');
+		expect(v).toContain('Secure');
+	});
+
+	it('omits Domain and Secure for localhost dev', () => {
+		const v = buildSessionClearCookie({ domain: null, secure: false });
+		expect(v).toContain('fic_session=');
+		expect(v).toContain('Max-Age=0');
+		expect(v).not.toContain('Domain=');
+		expect(v).not.toContain('Secure');
 	});
 });
 

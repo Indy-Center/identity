@@ -7,7 +7,8 @@
   "vars": {
     "CONNECT_BASE_URL": "https://auth.vatsim.net",
     "CONNECT_CALLBACK_URL": "https://auth.flyindycenter.com/login/callback",
-    "COOKIE_DOMAIN": ".flyindycenter.com"
+    "COOKIE_DOMAIN": ".flyindycenter.com",
+    "COOKIE_SECURE": "true"
   },
   "d1_databases": [
     {

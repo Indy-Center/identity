@@ -64,7 +64,14 @@ loginRoutes.get('/callback', async (c) => {
 	const userId = await upsertFromVatsim(db, profile, systemClock);
 	const { token } = await createSession(db, userId, systemClock);
 
-	c.header('Set-Cookie', buildSessionSetCookie(token, c.env.COOKIE_DOMAIN), { append: true });
+	c.header(
+		'Set-Cookie',
+		buildSessionSetCookie(token, {
+			domain: c.env.COOKIE_DOMAIN === 'localhost' ? null : c.env.COOKIE_DOMAIN,
+			secure: c.env.COOKIE_SECURE === 'true'
+		}),
+		{ append: true }
+	);
 	c.header('Set-Cookie', buildHostStateClearCookie('oauth_state'), { append: true });
 	c.header('Set-Cookie', buildHostStateClearCookie('oauth_return'), { append: true });
 
