@@ -18,6 +18,7 @@
   "exclude": [
     "vitest.config.ts",
     "drizzle.config.ts",
+    "scripts/**/*.ts",
     "node_modules"
   ]
 }
