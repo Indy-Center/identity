@@ -3,6 +3,7 @@ import { buildApp } from './app';
 import * as users from './rpc/users';
 import * as sessions from './rpc/sessions';
 import * as roles from './rpc/roles';
+import * as profile from './rpc/profile';
 import type { Env } from './env';
 
 const app = buildApp();
@@ -43,5 +44,9 @@ export default class Identity extends WorkerEntrypoint<Env> {
 	}
 	getRoles(userId: string) {
 		return roles.get(this.env, userId);
+	}
+
+	updateProfile(userId: string, patch: profile.ProfilePatch) {
+		return profile.update(this.env, userId, patch);
 	}
 }
