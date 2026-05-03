@@ -180,7 +180,9 @@ describe('GET /login/callback', () => {
 	it('502s with oauth_exchange_failed when the token exchange fails', async () => {
 		globalThis.fetch = vi
 			.fn()
-			.mockResolvedValueOnce(new Response('oops', { status: 500 })) as unknown as typeof fetch;
+			.mockImplementationOnce(() =>
+				Promise.resolve(new Response('oops', { status: 500 }))
+			) as unknown as typeof fetch;
 
 		const res = await exports.default.fetch(
 			'https://auth.flyindycenter.com/login/callback?code=auth_code&state=state_xyz',
