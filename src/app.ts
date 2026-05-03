@@ -1,13 +1,12 @@
 import { Hono } from 'hono';
-import type { Env, AppVariables } from './env';
-import { errorHandler } from './middleware/error';
-import { healthRoutes } from './routes/health';
-import { loginRoutes } from './routes/login';
+import { errorHandler } from './error-handler';
+import { loginRoutes } from './auth/routes';
 
 export function buildApp() {
-	const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+	const app = new Hono<{ Bindings: Cloudflare.Env }>();
 	app.onError(errorHandler);
-	app.route('/healthz', healthRoutes);
+	// /healthz inlined — single endpoint, doesn't need its own router
+	app.get('/healthz', (c) => c.json({ ok: true }));
 	app.route('/login', loginRoutes);
 	return app;
 }

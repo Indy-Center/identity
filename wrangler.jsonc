@@ -15,12 +15,9 @@
     {
       "binding": "DB",
       "database_name": "identity_db",
-      "database_id": "01e7c262-54ae-4107-895f-3b63a1f45b53",
-      "migrations_dir": "src/db/migrations"
+      "database_id": "32494e76-880a-4577-9d32-b24f1f8b9623",
+      "migrations_dir": "src/migrations"
     }
-  ],
-  "services": [
-    { "binding": "IDENTITY", "service": "identity" }
   ],
   "routes": [
     { "pattern": "auth.flyindycenter.com", "custom_domain": true }

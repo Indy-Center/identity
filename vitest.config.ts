@@ -1,8 +1,9 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
+import { kCurrentWorker } from 'miniflare';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig(async () => {
-	const migrationsPath = new URL('src/db/migrations', import.meta.url).pathname;
+	const migrationsPath = new URL('src/migrations', import.meta.url).pathname;
 	const migrations = await readD1Migrations(migrationsPath);
 
 	return {
@@ -20,6 +21,9 @@ export default defineConfig(async () => {
 						CONNECT_CALLBACK_URL: 'https://auth.flyindycenter.com/login/callback',
 						COOKIE_DOMAIN: '.flyindycenter.com',
 						COOKIE_SECURE: 'true'
+					},
+					serviceBindings: {
+						IDENTITY: kCurrentWorker
 					}
 				}
 			})

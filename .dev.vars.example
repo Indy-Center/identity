@@ -1,0 +1,9 @@
+# Copy to .dev.vars and fill in the VATSIM Connect dev client credentials.
+# .dev.vars is gitignored.
+
+CONNECT_CLIENT_ID=
+CONNECT_CLIENT_SECRET=
+CONNECT_BASE_URL=https://auth-dev.vatsim.net
+CONNECT_CALLBACK_URL=http://localhost:8787/login/callback
+COOKIE_DOMAIN=localhost
+COOKIE_SECURE=false

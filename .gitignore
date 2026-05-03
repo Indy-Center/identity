@@ -20,6 +20,7 @@ node_modules/
 .env.production
 .dev.vars
 .dev.vars.*
+!.dev.vars.example
 
 # logs
 logs/
@@ -32,3 +33,6 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+
+# specs and internal docs (not for commit)
+docs/

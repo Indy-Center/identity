@@ -2,73 +2,69 @@
 
 Centralized identity Worker for `*.flyindycenter.com`. Wraps VATSIM Connect OAuth, mints session cookies on `.flyindycenter.com`, exposes typed RPC over Cloudflare service bindings.
 
-See `docs/specs/2026-04-26-identity-design.md` for the full design.
+[![Tests and Verification](https://github.com/Indy-Center/identity/actions/workflows/ci.yml/badge.svg)](https://github.com/Indy-Center/identity/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## HTTP surface
 
-- `GET /login?return_url=…` — start OAuth (browser).
-- `GET /login/callback?code=…&state=…` — OAuth callback from VATSIM (browser).
-- `GET /healthz` — liveness check.
+- `GET /login?return_url=…` starts the OAuth flow (browser).
+- `GET /login/callback?code=…&state=…` is the OAuth callback from VATSIM (browser).
+- `GET /healthz` is the liveness check.
 
-That's it. Session validation, role management, profile updates, and logout are all over **RPC**, not HTTP. Consumer Workers call `env.IDENTITY.validateSession(token)`, `env.IDENTITY.invalidateSession(token)`, etc.
+Session validation, role management, profile updates, and logout all go over **RPC**, not HTTP. Consumer Workers call `env.IDENTITY.validateSession(token)`, `env.IDENTITY.invalidateSession(token)`, etc.
+
+## Project layout
+
+- `src/users/`, `src/sessions/`, `src/roles/`: domain modules. Plain async functions over a Drizzle `DB`. `src/index.ts` delegates RPC methods straight to these.
+- `src/client/`: the consumer-facing surface. Types (`User`, `SessionPayload`, `AttributePatch`, `VatsimProfile`), the `IdentityRpc` interface, and `IdentityError`. Other Workers import from here so they only see the public contract, not the implementation.
+- `src/migrations/`: D1 migrations, applied automatically on deploy.
 
 ## Local development
 
 ```bash
 npm install
+npm run db:migrate:local   # apply D1 migrations to the local sqlite
+npm run dev                # wrangler dev on http://localhost:8787
+npm test                   # vitest with workers pool
+npm run cf-typegen         # regenerate worker-configuration.d.ts after wrangler.jsonc changes
+```
+
+For OAuth testing locally, register a VATSIM Connect dev client with redirect URI `http://localhost:8787/login/callback`, then copy `.dev.vars.example` to `.dev.vars` and fill in the credentials.
+
+When `COOKIE_DOMAIN=localhost`, identity also accepts loopback `return_url` values (`http://localhost:*`, `http://127.0.0.1:*`, `http://[::1]:*`) so dev consumer apps can complete the OAuth flow against the local worker. Production stays strict.
+
+If the local D1 gets tangled up:
+
+```bash
+npx wrangler d1 delete identity_db
+npx wrangler d1 create identity_db
+# Copy the new database_id into wrangler.jsonc
 npm run db:migrate:local
-npm run dev
-```
-
-The dev Worker listens on `http://localhost:8787`. For OAuth testing locally, register a VATSIM Connect dev client with redirect URI `http://localhost:8787/login/callback` and put credentials in `.dev.vars` (gitignored):
-
-```
-CONNECT_CLIENT_ID=...
-CONNECT_CLIENT_SECRET=...
-CONNECT_BASE_URL=https://auth-dev.vatsim.net
-CONNECT_CALLBACK_URL=http://localhost:8787/login/callback
-COOKIE_DOMAIN=localhost
 ```
 
 ## Tests
 
 ```bash
-npm test            # vitest with workers pool — real D1, real bindings
+npm test
 npm run typecheck
 ```
 
-Tests use `@cloudflare/vitest-pool-workers`; D1 migrations are applied automatically before each suite via `test/helpers/apply-migrations.ts`. The test pool also exposes `env.IDENTITY` (a self-service-binding) so RPC methods can be invoked directly from test code.
-
 ## Deployment
 
-One-time setup:
+Pushing to `main` triggers `.github/workflows/build-and-deploy.yml`, which applies pending D1 migrations and then deploys the Worker. Requires a `CLOUDFLARE_WORKERS_API_KEY` repository secret with `Workers Scripts:Edit` and `D1:Edit` permissions.
+
+One-time setup per environment:
 
 ```bash
 wrangler d1 create identity_db
-# → copy the database_id into wrangler.jsonc
+# copy the database_id into wrangler.jsonc
 wrangler secret put CONNECT_CLIENT_ID
 wrangler secret put CONNECT_CLIENT_SECRET
 ```
 
-Routine deploys:
-
-```bash
-npm run db:generate                                  # if schema changed
-wrangler d1 migrations apply identity_db --remote
-npm run deploy
-```
-
-Add the route in `wrangler.jsonc` (or via the dashboard) so the Worker handles `auth.flyindycenter.com/*`:
-
-```jsonc
-"routes": [
-  { "pattern": "auth.flyindycenter.com/*", "custom_domain": true }
-]
-```
-
 ## Consumer apps
 
-Other Workers consume identity via a service binding. In their `wrangler.jsonc` (or `wrangler.toml`):
+Other Workers consume identity via a service binding. In their `wrangler.jsonc`:
 
 ```jsonc
 "services": [
@@ -76,18 +72,17 @@ Other Workers consume identity via a service binding. In their `wrangler.jsonc` 
 ]
 ```
 
-Then in code:
+Type the binding against `IdentityRpc` (from `src/client/api.ts`) so consumers only see the public surface:
 
 ```ts
+import type { IdentityRpc } from './identity-client';
+
+type Env = {
+	IDENTITY: Service<IdentityRpc>;
+};
+
 const session = await env.IDENTITY.validateSession(cookieToken);
 if (!session) return new Response('unauthorized', { status: 401 });
 // session.userId is the canonical UUID; session.roles is string[]
-// fetch the full user profile separately when needed:
 const user = await env.IDENTITY.getUserById(session.userId);
 ```
-
-See the `IdentityRpc` interface in `docs/specs/2026-04-26-identity-design.md` §"RPC API" for the full method list.
-
-## User migration
-
-Identity has no bulk migration script. Users from community-website are migrated **lazily on login** — `upsertFromVatsim` either matches an existing row by CID or creates a fresh one. Consumer apps that previously held user data are responsible for bridging their legacy IDs to identity's UUIDs (typically via CID lookup) when their data references users.
