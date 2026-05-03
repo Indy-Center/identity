@@ -16,7 +16,7 @@ const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
 
 const ProductionReturnUrlSchema = z
 	.string()
-	.regex(/^https:\/\/[a-z0-9-]+\.flyindycenter\.com(\/|$)/);
+	.regex(/^https:\/\/([a-z0-9-]+\.)?flyindycenter\.com(\/|$)/);
 const LoopbackReturnUrlSchema = z
 	.string()
 	.regex(/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/);
@@ -26,7 +26,7 @@ export function validateReturnUrl(env: Cloudflare.Env, raw: string | undefined):
 	if (ProductionReturnUrlSchema.safeParse(raw).success) return raw;
 	if (env.COOKIE_DOMAIN === 'localhost' && LoopbackReturnUrlSchema.safeParse(raw).success)
 		return raw;
-	throw new IdentityError('invalid_return_url', 400, 'return_url must be on .flyindycenter.com');
+	throw new IdentityError('invalid_return_url', 400, 'return_url must be on flyindycenter.com');
 }
 
 // Bundles every required piece of input on the OAuth callback: the `code`

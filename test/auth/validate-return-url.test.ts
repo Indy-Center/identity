@@ -20,12 +20,25 @@ describe('validateReturnUrl', () => {
 			);
 		});
 
+		it('accepts the apex flyindycenter.com URL', () => {
+			expect(validateReturnUrl(env, 'https://flyindycenter.com/')).toBe(
+				'https://flyindycenter.com/'
+			);
+			expect(validateReturnUrl(env, 'https://flyindycenter.com')).toBe('https://flyindycenter.com');
+		});
+
 		it('rejects http://localhost in prod mode', () => {
 			expect(() => validateReturnUrl(env, 'http://localhost:5173/')).toThrow(IdentityError);
 		});
 
 		it('rejects an off-domain URL', () => {
 			expect(() => validateReturnUrl(env, 'https://evil.com/x')).toThrow(IdentityError);
+		});
+
+		it('rejects a lookalike that prefixes flyindycenter.com', () => {
+			expect(() => validateReturnUrl(env, 'https://flyindycenter.com.evil.com/')).toThrow(
+				IdentityError
+			);
 		});
 	});
 
