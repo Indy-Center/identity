@@ -88,3 +88,7 @@ if (!session) return new Response('unauthorized', { status: 401 });
 // session.userId is the canonical UUID; session.roles is string[]
 const user = await env.IDENTITY.getUserById(session.userId);
 ```
+
+## Disclaimer
+
+Not affiliated with the FAA or any aviation governing body. For use on the [VATSIM](https://www.vatsim.net) network only.
