@@ -13,6 +13,8 @@ Centralized identity Worker for `*.flyindycenter.com`. Wraps VATSIM Connect OAut
 
 Session validation, role management, profile updates, and logout all go over **RPC**, not HTTP. Consumer Workers call `env.IDENTITY.validateSession(token)`, `env.IDENTITY.invalidateSession(token)`, etc.
 
+> **Why no HTTP surface for those?** RPC over service bindings is in-process — no network round trip, no JSON serialization, no CORS, typed errors propagating cleanly. For Workers consuming identity, that's strictly better than HTTP. We've considered adding a thin HTTP layer (e.g. `GET /api/me`, `POST /api/logout`) wrapping the same internal functions the RPC methods use, and it's the right answer the moment a non-Worker consumer shows up — browser-only static site, mobile app, third-party tool — but until then we stay RPC-only. If you need this, see the deferred-option note in `WIKI_APP_DESIGN.md`.
+
 ## Project layout
 
 - `src/users/`, `src/sessions/`, `src/roles/`: domain modules. Plain async functions over a Drizzle `DB`. `src/index.ts` delegates RPC methods straight to these.
