@@ -91,4 +91,4 @@ const user = await env.IDENTITY.getUserById(session.userId);
 
 ## Disclaimer
 
-Not affiliated with the FAA or any aviation governing body. For use on the [VATSIM](https://www.vatsim.net) network only.
+We are not affiliated with the FAA or any aviation governing body. This software is for flight simulation use on the [VATSIM](https://www.vatsim.net) network.
