@@ -1,5 +1,5 @@
 import type { ErrorHandler } from 'hono';
-import { IdentityError } from './client/errors';
+import { IdentityError } from './lib/errors';
 
 export const errorHandler: ErrorHandler = (err, c) => {
 	if (err instanceof IdentityError) {

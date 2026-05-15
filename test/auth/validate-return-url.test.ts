@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { validateReturnUrl } from '../../src/auth/routes';
-import { IdentityError } from '../../src/client/errors';
+import { IdentityError } from '../../src/lib/errors';
 
 function makeEnv(cookieDomain: string): Cloudflare.Env {
 	return { COOKIE_DOMAIN: cookieDomain } as unknown as Cloudflare.Env;

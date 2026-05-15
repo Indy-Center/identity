@@ -1,17 +1,20 @@
+// src/index.ts
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { buildApp } from './app';
 import { makeDb } from './db';
 import * as users from './users/domain';
 import * as sessions from './sessions/domain';
 import * as roles from './roles/domain';
+import * as onlineControllers from './online-controllers/domain';
+import * as flightPlans from './flight-plans/domain';
+import { getFixtureFlightPlan, getFixtureOnlineController } from './dev-fixtures';
 import type { AttributePatch } from './client/attributes';
 import type { IdentityRpc } from './client/api';
+import type { SessionContext } from './client/session-context';
 
 const app = buildApp();
 
 export default class Identity extends WorkerEntrypoint<Cloudflare.Env> implements IdentityRpc {
-	// One-liner accessor — the actual caching lives in db.ts (WeakMap keyed
-	// by the underlying D1 binding), so this just looks the wrapper up.
 	private get db() {
 		return makeDb(this.env.DB);
 	}
@@ -49,13 +52,31 @@ export default class Identity extends WorkerEntrypoint<Cloudflare.Env> implement
 	}
 
 	// sessions
-	validateSession(token: string) {
-		return sessions.getSessionPayload(this.db, token);
-	}
-	async getCurrentUser(token: string) {
+	async getSessionContext(token: string): Promise<SessionContext | null> {
 		const session = await sessions.validateSession(this.db, token);
-		if (!session) return null;
-		return users.getById(this.db, session.userId);
+		if (!session) {
+			return null;
+		}
+		const user = await users.getById(this.db, session.userId);
+		if (!user) {
+			return null;
+		}
+		const roleRows = await roles.get(this.db, user.id);
+		// Dev fixtures win over live feeds when COOKIE_DOMAIN === 'localhost'.
+		// Returns null in production, so the live-feed lookups always run there.
+		const fixtureSession = getFixtureOnlineController(this.env, user.cid);
+		const fixtureFlightPlan = getFixtureFlightPlan(this.env, user.cid);
+		const [liveSession, liveFlightPlan] = await Promise.all([
+			fixtureSession ? Promise.resolve(null) : onlineControllers.getActiveSession(user.cid),
+			fixtureFlightPlan ? Promise.resolve(null) : flightPlans.getFlightPlan(user.cid)
+		]);
+		return {
+			user,
+			roles: roleRows,
+			sessionExpiresAt: new Date(session.expiresAt),
+			activeSession: fixtureSession ?? liveSession,
+			activeFlightPlan: fixtureFlightPlan ?? liveFlightPlan
+		};
 	}
 	invalidateSession(token: string) {
 		return sessions.deleteSessionByToken(this.db, token);

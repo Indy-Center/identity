@@ -1,8 +1,9 @@
 import { eq, sql } from 'drizzle-orm';
 import { sessions, users, userRoles } from '../schema';
 import type { DB } from '../db';
-import { AttributePatchSchema, type AttributePatch } from '../client/attributes';
-import { IdentityError } from '../client/errors';
+import type { AttributePatch } from '../client/attributes';
+import { AttributePatchSchema } from './attributes-schema';
+import { IdentityError } from '../lib/errors';
 import type { User } from '../client/user';
 import type { VatsimProfile } from '../client/vatsim';
 
@@ -53,8 +54,12 @@ export async function setUserActive(
 		patchObj.disabledBy = null;
 	} else {
 		patchObj.disabledAt = now;
-		if (opts.reason !== undefined) patchObj.disabledReason = opts.reason;
-		if (opts.changedBy !== undefined) patchObj.disabledBy = opts.changedBy;
+		if (opts.reason !== undefined) {
+			patchObj.disabledReason = opts.reason;
+		}
+		if (opts.changedBy !== undefined) {
+			patchObj.disabledBy = opts.changedBy;
+		}
 	}
 	const patchJson = JSON.stringify(patchObj);
 
@@ -95,7 +100,9 @@ export async function setAttributes(db: DB, userId: string, patch: AttributePatc
 	// intent obvious for the next reader.
 	const patchObj: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(validated)) {
-		if (value !== undefined) patchObj[key] = value;
+		if (value !== undefined) {
+			patchObj[key] = value;
+		}
 	}
 	const patchJson = JSON.stringify(patchObj);
 
@@ -153,7 +160,9 @@ export async function listOperatingInitials(db: DB): Promise<string[]> {
 		.all();
 	const set = new Set<string>();
 	for (const r of rows) {
-		if (typeof r.oi === 'string' && r.oi.length > 0) set.add(r.oi);
+		if (typeof r.oi === 'string' && r.oi.length > 0) {
+			set.add(r.oi);
+		}
 	}
 	return [...set];
 }

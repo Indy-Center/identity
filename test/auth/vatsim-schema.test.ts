@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { VatsimProfileSchema, type VatsimProfile } from '../../src/client/vatsim';
+import type { VatsimProfile } from '../../src/client/vatsim';
+import { VatsimProfileSchema } from '../../src/auth/vatsim-schema';
 
 describe('VatsimProfileSchema', () => {
 	it('parses a minimal valid profile', () => {

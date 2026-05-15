@@ -38,17 +38,27 @@ export class IdentityError extends Error {
 }
 
 export function isIdentityError(e: unknown): boolean {
-	if (e instanceof IdentityError) return true;
-	if (e == null || typeof e !== 'object') return false;
+	if (e instanceof IdentityError) {
+		return true;
+	}
+	if (e == null || typeof e !== 'object') {
+		return false;
+	}
 	const name = (e as { name?: unknown }).name;
 	return typeof name === 'string' && name.startsWith('IdentityError:');
 }
 
 export function getIdentityErrorCode(e: unknown): ErrorCode | null {
-	if (e instanceof IdentityError) return e.code;
-	if (e == null || typeof e !== 'object') return null;
+	if (e instanceof IdentityError) {
+		return e.code;
+	}
+	if (e == null || typeof e !== 'object') {
+		return null;
+	}
 	const name = (e as { name?: unknown }).name;
-	if (typeof name !== 'string' || !name.startsWith('IdentityError:')) return null;
+	if (typeof name !== 'string' || !name.startsWith('IdentityError:')) {
+		return null;
+	}
 	return name.slice('IdentityError:'.length) as ErrorCode;
 }
 

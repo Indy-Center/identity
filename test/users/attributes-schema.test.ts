@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-	AttributesSchema,
-	AttributePatchSchema,
-	type Attributes,
-	type AttributePatch
-} from '../../src/client/attributes';
+import type { Attributes, AttributePatch } from '../../src/client/attributes';
+import { AttributesSchema, AttributePatchSchema } from '../../src/users/attributes-schema';
 
 describe('AttributesSchema', () => {
 	it('parses an empty object', () => {

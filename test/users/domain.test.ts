@@ -14,7 +14,7 @@ import {
 	listOperatingInitials
 } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
-import { IdentityError } from '../../src/client/errors';
+import { IdentityError } from '../../src/lib/errors';
 import type { VatsimProfile } from '../../src/client/vatsim';
 
 beforeEach(async () => {

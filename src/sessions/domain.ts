@@ -1,8 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { DB } from '../db';
-import { sessions, userRoles, users, type Session } from '../schema';
+import { sessions, users, type Session } from '../schema';
 import { randomBase32, sha256Hex } from '../crypto';
-import type { SessionPayload } from '../client/session';
 
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 export const SESSION_REFRESH_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
@@ -57,7 +56,9 @@ export async function validateSession(db: DB, token: string): Promise<Session | 
 		.innerJoin(users, eq(users.id, sessions.userId))
 		.where(eq(sessions.id, id))
 		.get();
-	if (!row) return null;
+	if (!row) {
+		return null;
+	}
 	// Defense-in-depth: setUserActive(false) atomically deletes sessions, but
 	// the JOIN + isActive check protects against any path that leaves an
 	// orphan session row attached to a disabled user.
@@ -72,19 +73,4 @@ export async function validateSession(db: DB, token: string): Promise<Session | 
 		.set({ lastSeenAt: now, expiresAt: newExpiresAt })
 		.where(eq(sessions.id, row.session.id));
 	return { ...row.session, lastSeenAt: now, expiresAt: newExpiresAt };
-}
-
-export async function getSessionPayload(db: DB, token: string): Promise<SessionPayload | null> {
-	const session = await validateSession(db, token);
-	if (!session) return null;
-	const roleRows = await db
-		.select({ role: userRoles.role })
-		.from(userRoles)
-		.where(eq(userRoles.userId, session.userId))
-		.all();
-	return {
-		userId: session.userId,
-		roles: roleRows.map((r) => r.role),
-		expiresAt: session.expiresAt
-	};
 }

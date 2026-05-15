@@ -3,11 +3,11 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { makeDb } from '../db';
 import { buildAuthorizationUrl, exchangeCodeForToken } from './oauth';
-import { createSession } from '../sessions/domain';
+import { createSession, deleteSessionByToken } from '../sessions/domain';
 import { upsertFromVatsim } from '../users/domain';
 import { fetchVatsimProfile } from './vatsim';
 import { randomBase32 } from '../crypto';
-import { IdentityError } from '../client/errors';
+import { IdentityError } from '../lib/errors';
 
 export const loginRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
@@ -22,10 +22,15 @@ const LoopbackReturnUrlSchema = z
 	.regex(/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/);
 
 export function validateReturnUrl(env: Cloudflare.Env, raw: string | undefined): string | null {
-	if (!raw) return null;
-	if (ProductionReturnUrlSchema.safeParse(raw).success) return raw;
-	if (env.COOKIE_DOMAIN === 'localhost' && LoopbackReturnUrlSchema.safeParse(raw).success)
+	if (!raw) {
+		return null;
+	}
+	if (ProductionReturnUrlSchema.safeParse(raw).success) {
 		return raw;
+	}
+	if (env.COOKIE_DOMAIN === 'localhost' && LoopbackReturnUrlSchema.safeParse(raw).success) {
+		return raw;
+	}
 	throw new IdentityError('invalid_return_url', 400, 'return_url must be on flyindycenter.com');
 }
 
@@ -111,4 +116,28 @@ loginRoutes.get('/callback', async (c) => {
 	deleteCookie(c, 'oauth_return', { prefix: 'host' });
 
 	return c.redirect(returnCookie, 302);
+});
+
+export const logoutRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
+
+logoutRoutes.get('/', async (c) => {
+	const returnUrl = validateReturnUrl(c.env, c.req.query('return_url'));
+	if (!returnUrl) {
+		throw new IdentityError('invalid_return_url', 400, 'return_url query parameter is required');
+	}
+
+	const token = getCookie(c, 'fic_session');
+	if (token) {
+		const db = makeDb(c.env.DB);
+		await deleteSessionByToken(db, token);
+	}
+
+	deleteCookie(c, 'fic_session', {
+		domain: c.env.COOKIE_DOMAIN,
+		path: '/',
+		secure: c.env.COOKIE_SECURE === 'true',
+		sameSite: 'Lax'
+	});
+
+	return c.redirect(returnUrl, 302);
 });
