@@ -78,8 +78,11 @@ export async function setUserActive(
 		[row] = await updateStmt;
 	} else {
 		// Disabling must invalidate every existing session in the same
-		// transaction — validateSession does not re-check isActive, so a
-		// partial commit would leave a banned user with live cookies.
+		// transaction, for immediate revocation — a disabled user's cookies
+		// should stop working right away, not whenever their session expires.
+		// validateSession also joins on users.isActive as defense in depth,
+		// but that shouldn't be the only thing standing between a banned user
+		// and a live session.
 		const deleteSessionsStmt = db.delete(sessions).where(eq(sessions.userId, userId));
 		const [updated] = await db.batch([updateStmt, deleteSessionsStmt]);
 		[row] = updated;

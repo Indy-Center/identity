@@ -9,9 +9,15 @@ permissions:
   contents: write # push the release tag
   id-token: write # npm trusted publishing (OIDC) and provenance
 
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Belt-and-suspenders: only ever publish from main, regardless of what ref workflow_dispatch is run against.
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,4 +47,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "v$PUBLISH_VERSION"
-          git push origin "v$PUBLISH_VERSION"
+          if ! git push origin "v$PUBLISH_VERSION"; then
+            echo "::warning::published but tag push failed; tag v$PUBLISH_VERSION manually"
+            exit 0
+          fi

@@ -4,7 +4,7 @@
 		"rootDir": "src/client",
 		"outDir": "dist",
 		"declaration": true,
-		"declarationMap": true,
+		"declarationMap": false,
 		"emitDeclarationOnly": false,
 		"noEmit": false,
 		"module": "ESNext",
