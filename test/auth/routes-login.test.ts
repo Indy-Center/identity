@@ -61,14 +61,14 @@ describe('GET /login', () => {
 		expect(body.error.code).toBe('invalid_return_url');
 	});
 
-	it('rejects a loopback return_url in prod mode (COOKIE_DOMAIN=.flyindycenter.com)', async () => {
+	it('accepts a loopback return_url and stores it in __Host-oauth_return', async () => {
 		const res = await exports.default.fetch(
 			'https://auth.flyindycenter.com/login?return_url=' +
 				encodeURIComponent('http://localhost:5173/'),
 			{ redirect: 'manual' }
 		);
-		expect(res.status).toBe(400);
-		const body = (await res.json()) as { error: { code: string } };
-		expect(body.error.code).toBe('invalid_return_url');
+		expect(res.status).toBe(302);
+		const ret = res.headers.getSetCookie().find((c) => c.startsWith('__Host-oauth_return='));
+		expect(ret).toContain('localhost');
 	});
 });

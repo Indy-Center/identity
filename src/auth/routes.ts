@@ -8,31 +8,12 @@ import { upsertFromVatsim } from '../users/domain';
 import { fetchVatsimProfile } from './vatsim';
 import { randomBase32 } from '../crypto';
 import { IdentityError } from '../client/errors';
+import { validateReturnUrl } from '../oauth/redirect-uri';
 
 export const loginRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
-
-const ProductionReturnUrlSchema = z
-	.string()
-	.regex(/^https:\/\/([a-z0-9-]+\.)?flyindycenter\.com(\/|$)/);
-const LoopbackReturnUrlSchema = z
-	.string()
-	.regex(/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/);
-
-export function validateReturnUrl(env: Cloudflare.Env, raw: string | undefined): string | null {
-	if (!raw) {
-		return null;
-	}
-	if (ProductionReturnUrlSchema.safeParse(raw).success) {
-		return raw;
-	}
-	if (env.COOKIE_DOMAIN === 'localhost' && LoopbackReturnUrlSchema.safeParse(raw).success) {
-		return raw;
-	}
-	throw new IdentityError('invalid_return_url', 400, 'return_url must be on flyindycenter.com');
-}
 
 // Bundles every required piece of input on the OAuth callback: the `code`
 // and `state` from VATSIM's redirect query, plus the `oauth_state` cookie
@@ -47,10 +28,7 @@ const CallbackInputSchema = z
 	.refine((d) => d.state === d.stateCookie, { message: 'state cookie mismatch' });
 
 loginRoutes.get('/', (c) => {
-	const returnUrl = validateReturnUrl(c.env, c.req.query('return_url'));
-	if (!returnUrl) {
-		throw new IdentityError('invalid_return_url', 400, 'return_url query parameter is required');
-	}
+	const returnUrl = validateReturnUrl(c.req.query('return_url'));
 	const state = randomBase32(16);
 	const authorizeUrl = buildAuthorizationUrl(c.env, state);
 
@@ -121,10 +99,7 @@ loginRoutes.get('/callback', async (c) => {
 export const logoutRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
 logoutRoutes.get('/', async (c) => {
-	const returnUrl = validateReturnUrl(c.env, c.req.query('return_url'));
-	if (!returnUrl) {
-		throw new IdentityError('invalid_return_url', 400, 'return_url query parameter is required');
-	}
+	const returnUrl = validateReturnUrl(c.req.query('return_url'));
 
 	const token = getCookie(c, 'fic_session');
 	if (token) {
