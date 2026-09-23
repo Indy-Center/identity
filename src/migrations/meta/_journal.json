@@ -22,6 +22,13 @@
       "when": 1777754736500,
       "tag": "0002_lively_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790189819352,
+      "tag": "0003_daffy_runaways",
+      "breakpoints": true
     }
   ]
 }

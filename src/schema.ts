@@ -45,3 +45,20 @@ export const userRoles = sqliteTable(
 	},
 	(t) => [primaryKey({ columns: [t.userId, t.role] })]
 );
+
+// Single-use OAuth authorization codes (RFC 6749 §4.1), 60-second TTL.
+// `id` is sha256(code); the raw code is never stored. Bound to the
+// redirect_uri it was issued for.
+export const authorizationCodes = sqliteTable(
+	'authorization_codes',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		redirectUri: text('redirect_uri').notNull(),
+		expiresAt: integer('expires_at').notNull(),
+		createdAt: integer('created_at').notNull()
+	},
+	(t) => [index('idx_authorization_codes_expires').on(t.expiresAt)]
+);

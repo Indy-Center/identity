@@ -1,5 +1,5 @@
 // test/auth/routes-logout.test.ts
-import { env } from 'cloudflare:workers';
+import { env, exports } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDb } from '../../src/db';
 import { sessions, users, userRoles } from '../../src/schema';
@@ -27,7 +27,7 @@ describe('GET /logout', () => {
 				redirect: 'manual'
 			}
 		);
-		const res = await env.IDENTITY.fetch(req);
+		const res = await exports.default.fetch(req);
 
 		expect(res.status).toBe(302);
 		expect(res.headers.get('location')).toBe('https://charts.flyindycenter.com/');
@@ -47,7 +47,7 @@ describe('GET /logout', () => {
 				method: 'GET'
 			}
 		);
-		const res = await env.IDENTITY.fetch(req);
+		const res = await exports.default.fetch(req);
 		expect(res.status).toBe(400);
 	});
 
@@ -56,7 +56,7 @@ describe('GET /logout', () => {
 			'https://identity.flyindycenter.com/logout?return_url=https://charts.flyindycenter.com/',
 			{ redirect: 'manual' }
 		);
-		const res = await env.IDENTITY.fetch(req);
+		const res = await exports.default.fetch(req);
 		expect(res.status).toBe(302);
 		expect(res.headers.get('location')).toBe('https://charts.flyindycenter.com/');
 	});

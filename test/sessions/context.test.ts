@@ -1,9 +1,12 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
-import { users, sessions, userRoles } from '../../src/schema';
+import { authorizationCodes, users, sessions, userRoles } from '../../src/schema';
 import { upsertFromVatsim } from '../../src/users/domain';
-import { createSession } from '../../src/sessions/domain';
+import { createSession, validateSession } from '../../src/sessions/domain';
+import { exchangeCodeForSession, getSessionContext, logout } from '../../src/sessions/context';
+import { createAuthorizationCode } from '../../src/authorization-codes/domain';
+import { IdentityError } from '../../src/client/errors';
 import { makeVatsimProfile } from '../helpers/fixtures';
 import { __resetCacheForTests } from '../../src/online-controllers/domain';
 import type { OnlineController } from '../../src/online-controllers/types';
@@ -12,6 +15,7 @@ import type { FlightPlan } from '../../src/flight-plans/types';
 
 beforeEach(async () => {
 	const db = makeDb(env.DB);
+	await db.delete(authorizationCodes);
 	await db.delete(userRoles);
 	await db.delete(sessions);
 	await db.delete(users);
@@ -48,24 +52,24 @@ function mockBothFeeds(
 	});
 }
 
-describe('rpc/logout', () => {
+describe('logout', () => {
 	it('deletes the session row', async () => {
 		const db = makeDb(env.DB);
 		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
 		const { token } = await createSession(db, userId);
-		await env.IDENTITY.logout(token);
+		await logout(env, token);
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 	});
 
 	it('is a no-op for an unknown token', async () => {
-		await expect(env.IDENTITY.logout('nope')).resolves.toBeUndefined();
+		await expect(logout(env, 'nope')).resolves.toBeUndefined();
 	});
 });
 
-describe('rpc/getSessionContext', () => {
+describe('getSessionContext', () => {
 	it('returns null for an unknown token', async () => {
 		mockBothFeeds([], []);
-		expect(await env.IDENTITY.getSessionContext('nope')).toBeNull();
+		expect(await getSessionContext(env, 'nope')).toBeNull();
 	});
 
 	it('returns null after the session is invalidated', async () => {
@@ -73,8 +77,8 @@ describe('rpc/getSessionContext', () => {
 		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '5' }));
 		const { token } = await createSession(db, userId);
 		mockBothFeeds([], []);
-		await env.IDENTITY.logout(token);
-		expect(await env.IDENTITY.getSessionContext(token)).toBeNull();
+		await logout(env, token);
+		expect(await getSessionContext(env, token)).toBeNull();
 	});
 
 	it('returns the joined context with activeSession: null when user is offline', async () => {
@@ -84,7 +88,7 @@ describe('rpc/getSessionContext', () => {
 		await db.insert(userRoles).values({ userId, role: 'zid:admin', grantedAt: Date.now() });
 		mockBothFeeds([], []);
 
-		const ctx = await env.IDENTITY.getSessionContext(token);
+		const ctx = await getSessionContext(env, token);
 		expect(ctx).not.toBeNull();
 		expect(ctx!.user.cid).toBe('7');
 		expect(ctx!.roles).toEqual(['zid:admin']);
@@ -117,7 +121,7 @@ describe('rpc/getSessionContext', () => {
 		};
 		mockBothFeeds([controller], []);
 
-		const ctx = await env.IDENTITY.getSessionContext(token);
+		const ctx = await getSessionContext(env, token);
 		expect(ctx).not.toBeNull();
 		expect(ctx!.activeSession).not.toBeNull();
 		expect(ctx!.activeSession!.artccId).toBe('ZID');
@@ -138,7 +142,7 @@ describe('rpc/getSessionContext', () => {
 		};
 		mockBothFeeds([], [{ cid: 777, flight_plan: fp }]);
 
-		const ctx = await env.IDENTITY.getSessionContext(token);
+		const ctx = await getSessionContext(env, token);
 		expect(ctx).not.toBeNull();
 		expect(ctx!.activeFlightPlan).not.toBeNull();
 		expect(ctx!.activeFlightPlan!.departure).toBe('KIND');
@@ -151,7 +155,7 @@ describe('rpc/getSessionContext', () => {
 		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '888' }));
 		const { token } = await createSession(db, userId);
 		mockBothFeeds([], []);
-		const ctx = await env.IDENTITY.getSessionContext(token);
+		const ctx = await getSessionContext(env, token);
 		expect(ctx).not.toBeNull();
 		expect(ctx!.activeFlightPlan).toBeNull();
 	});
@@ -161,8 +165,49 @@ describe('rpc/getSessionContext', () => {
 		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '999' }));
 		const { token } = await createSession(db, userId);
 		mockBothFeeds([], [{ cid: 999, flight_plan: null }]);
-		const ctx = await env.IDENTITY.getSessionContext(token);
+		const ctx = await getSessionContext(env, token);
 		expect(ctx).not.toBeNull();
 		expect(ctx!.activeFlightPlan).toBeNull();
+	});
+});
+
+describe('exchangeCodeForSession', () => {
+	const REDIRECT = 'http://localhost:5173/';
+
+	it('returns a session for a fresh code', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '3' }));
+		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
+		mockBothFeeds([], []);
+
+		const result = await exchangeCodeForSession(env, code, REDIRECT);
+		expect(result.token).toMatch(/^[a-z2-7]{32}$/);
+		expect(result.expiresAt).toBeInstanceOf(Date);
+		expect(result.session.user.cid).toBe('3');
+		expect((await validateSession(db, result.token))?.userId).toBe(userId);
+	});
+
+	it('throws IdentityError invalid_code on reuse', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '4' }));
+		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
+		mockBothFeeds([], []);
+
+		await exchangeCodeForSession(env, code, REDIRECT);
+		await expect(exchangeCodeForSession(env, code, REDIRECT)).rejects.toMatchObject({
+			code: 'invalid_code',
+			status: 400
+		});
+		await expect(exchangeCodeForSession(env, code, REDIRECT)).rejects.toBeInstanceOf(IdentityError);
+	});
+
+	it('throws IdentityError invalid_code for a mismatched redirect URI', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '6' }));
+		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
+
+		await expect(
+			exchangeCodeForSession(env, code, 'https://charts.flyindycenter.com/')
+		).rejects.toMatchObject({ code: 'invalid_code' });
 	});
 });

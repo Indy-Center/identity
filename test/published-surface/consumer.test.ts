@@ -8,8 +8,6 @@
 
 import { describe, it, expect } from 'vitest';
 import type {
-	IdentityRpc,
-	IdentityBinding,
 	SessionContext,
 	OnlineController,
 	VnasPosition,
@@ -44,17 +42,9 @@ describe('published surface', () => {
 		const a: Attributes = {};
 		const ap: AttributePatch = {};
 		const oi: OperatingInitials = 'AB';
-		const rpc = {
-			async getSessionContext() {
-				return null;
-			},
-			async logout() {}
-		} as unknown as IdentityRpc;
 		const fp: FlightPlan = { departure: 'KIND', arrival: 'KORD' };
-		// IdentityBinding can't be constructed but should be assignable from any Service<IdentityRpc>.
-		type _b = IdentityBinding;
 		expect(ctx).toBeDefined();
-		expect([c, p, v, u, vp, a, ap, oi, rpc, fp]).toHaveLength(10);
+		expect([c, p, v, u, vp, a, ap, oi, fp]).toHaveLength(9);
 	});
 
 	it('exposes IdentityError as a runtime export', () => {

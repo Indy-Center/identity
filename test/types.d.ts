@@ -14,6 +14,5 @@ declare namespace Cloudflare {
 		CONNECT_CALLBACK_URL: string;
 		COOKIE_DOMAIN: string;
 		COOKIE_SECURE: string;
-		IDENTITY: import('../src/index').default;
 	}
 }
