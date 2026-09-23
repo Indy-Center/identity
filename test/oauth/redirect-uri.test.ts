@@ -36,6 +36,26 @@ describe('isAllowedRedirectUri', () => {
 		expect(isAllowedRedirectUri('/airports')).toBe(false);
 		expect(isAllowedRedirectUri('')).toBe(false);
 	});
+
+	it('rejects control characters and other lookalikes smuggled after the host', () => {
+		expect(isAllowedRedirectUri('https://flyindycenter.com/\r\nSet-Cookie: evil=1')).toBe(false);
+		expect(isAllowedRedirectUri('https://charts.flyindycenter.com/x\n')).toBe(false);
+		expect(isAllowedRedirectUri('http://localhost:5173/\ty')).toBe(false);
+		expect(isAllowedRedirectUri('https://charts.flyindycenter.com/a b')).toBe(false);
+		expect(isAllowedRedirectUri('https://CHARTS.flyindycenter.com/')).toBe(false);
+		expect(isAllowedRedirectUri('https://evil.com@charts.flyindycenter.com/')).toBe(false);
+		expect(isAllowedRedirectUri('https://charts.flyindycenter.com:8443/')).toBe(false);
+		expect(isAllowedRedirectUri('https://flyindycenter.com./')).toBe(false);
+		expect(isAllowedRedirectUri('http://localhost.evil.com/')).toBe(false);
+	});
+
+	it('accepts full URLs with query strings, fragments, and bracketed IPv6 hosts', () => {
+		expect(isAllowedRedirectUri('https://charts.flyindycenter.com/dashboard?x=1&y=2#frag')).toBe(
+			true
+		);
+		expect(isAllowedRedirectUri('http://localhost:5173/?code=abc')).toBe(true);
+		expect(isAllowedRedirectUri('http://[::1]:5173')).toBe(true);
+	});
 });
 
 describe('isAllowedOrigin', () => {

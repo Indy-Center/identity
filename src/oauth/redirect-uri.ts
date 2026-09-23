@@ -3,10 +3,12 @@ import { IdentityError } from '../client/errors';
 
 // Where identity may send a browser: https on flyindycenter.com or one level
 // of subdomain, or http on a loopback host (RFC 8252 §7.3) at any port. Both
-// patterns end in (\/|$), so a bare origin (scheme://host[:port]) matches the
-// same rules as a full URL; that is what lets CORS reuse them.
-const PRODUCTION = /^https:\/\/([a-z0-9-]+\.)?flyindycenter\.com(\/|$)/;
-const LOOPBACK = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/;
+// patterns end in (\/[^\s]*)?$, so a bare origin (scheme://host[:port]) matches
+// the same rules as a full URL; that is what lets CORS reuse them. The trailing
+// $ anchors the whole string so nothing after the host — including a raw CR/LF
+// or other control character bound for a Location header — can slip through.
+const PRODUCTION = /^https:\/\/([a-z0-9-]+\.)?flyindycenter\.com(\/[^\s]*)?$/;
+const LOOPBACK = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/[^\s]*)?$/;
 
 export function isAllowedRedirectUri(url: string): boolean {
 	return PRODUCTION.test(url) || LOOPBACK.test(url);
