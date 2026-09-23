@@ -59,7 +59,10 @@ export async function exchangeCodeForSession(
 	}
 	const session = await getSessionContext(env, minted.token);
 	if (!session) {
-		throw new IdentityError('internal', 500, 'session vanished after exchange');
+		// getSessionContext returns null when validateSession's join on users.isActive
+		// excludes the row — i.e. the user was disabled between code issuance and
+		// exchange. That's an access decision, not an internal fault.
+		throw new IdentityError('access_denied', 403, 'account disabled');
 	}
 	return { token: minted.token, expiresAt: new Date(minted.expiresAt), session };
 }

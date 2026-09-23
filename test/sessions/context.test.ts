@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
 import { authorizationCodes, users, sessions, userRoles } from '../../src/schema';
-import { upsertFromVatsim } from '../../src/users/domain';
+import { upsertFromVatsim, setUserActive } from '../../src/users/domain';
 import { createSession, validateSession } from '../../src/sessions/domain';
 import { exchangeCodeForSession, getSessionContext, logout } from '../../src/sessions/context';
 import { createAuthorizationCode } from '../../src/authorization-codes/domain';
@@ -209,5 +209,22 @@ describe('exchangeCodeForSession', () => {
 		await expect(
 			exchangeCodeForSession(env, code, 'https://charts.flyindycenter.com/')
 		).rejects.toMatchObject({ code: 'invalid_code' });
+	});
+
+	it('throws IdentityError access_denied when the user was disabled before exchange', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '8' }));
+		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
+		await setUserActive(db, userId, false, { reason: 'test' });
+		mockBothFeeds([], []);
+
+		expect.assertions(3);
+		try {
+			await exchangeCodeForSession(env, code, REDIRECT);
+		} catch (err) {
+			expect(err).toBeInstanceOf(IdentityError);
+			expect((err as IdentityError).code).toBe('access_denied');
+			expect((err as IdentityError).status).toBe(403);
+		}
 	});
 });
