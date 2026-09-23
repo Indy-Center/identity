@@ -1,8 +1,8 @@
 // src/client/client.ts
 // The consumer side of identity's OAuth endpoints. Uses only fetch and URL,
 // so it runs unchanged in Workers, Node and the browser.
-import type { SessionContext } from './session-context';
-import { IdentityError, type ErrorCode } from './errors.js';
+import type { SessionContext } from './session-context.js';
+import { IdentityError, isErrorCode, type ErrorCode } from './errors.js';
 import {
 	ErrorWireSchema,
 	OAuthErrorWireSchema,
@@ -26,10 +26,16 @@ export function sessionCookieOptions({ expiresAt, secure }: { expiresAt: Date; s
 
 export type ExchangedSession = { token: string; expiresAt: Date; session: SessionContext };
 
-/** An exchanged session plus where to send the browser: the landing URL minus `code`/`state`. */
-export type CompletedLogin = ExchangedSession & { redirectTo: string };
+export type CompletedLogin = ExchangedSession & {
+	/**
+	 * Where to send the browser: the absolute landing URL minus `code`,
+	 * `state` and the fragment. Always on the consumer's own origin, since it
+	 * is built from the consumer's own request URL.
+	 */
+	redirectTo: string;
+};
 
-export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type IdentityClientOptions = {
 	/** Origin for API calls. Default `https://auth.flyindycenter.com`. */
@@ -49,7 +55,7 @@ export interface IdentityClient {
 	logoutUrl(returnUrl: string): string;
 	/**
 	 * If `url` carries `?code=`, exchange it and return the session plus the
-	 * URL to redirect to (same URL without `code`/`state`). Otherwise null.
+	 * absolute URL to redirect to (same URL without `code`/`state`). Otherwise null.
 	 */
 	completeLogin(url: string | URL): Promise<CompletedLogin | null>;
 	/** Session context for a token, or null if unknown, expired, or revoked. */
@@ -90,9 +96,19 @@ async function errorFromResponse(res: Response): Promise<IdentityError> {
 	const envelope = ErrorWireSchema.safeParse(body);
 	if (envelope.success) {
 		const { code, message } = envelope.data.error;
-		return new IdentityError(code as ErrorCode, res.status, message);
+		return new IdentityError(isErrorCode(code) ? code : 'internal', res.status, message);
 	}
 	return new IdentityError('internal', res.status, `identity responded ${res.status}`);
+}
+
+// Parse a 2xx body. A body that is not JSON or not the expected shape is
+// still an IdentityError, so callers only ever handle one error type.
+async function parseBody<T>(res: Response, schema: { parse(v: unknown): T }): Promise<T> {
+	try {
+		return schema.parse(await res.json());
+	} catch {
+		throw new IdentityError('internal', res.status, 'unexpected response from identity');
+	}
 }
 
 export function createIdentityClient(options: IdentityClientOptions = {}): IdentityClient {
@@ -118,7 +134,7 @@ export function createIdentityClient(options: IdentityClientOptions = {}): Ident
 		if (!res.ok) {
 			throw await errorFromResponse(res);
 		}
-		return SessionContextWireSchema.parse(await res.json());
+		return parseBody(res, SessionContextWireSchema);
 	}
 
 	async function exchangeCode(code: string, redirectUri: string): Promise<ExchangedSession> {
@@ -131,7 +147,7 @@ export function createIdentityClient(options: IdentityClientOptions = {}): Ident
 		if (!res.ok) {
 			throw await errorFromResponse(res);
 		}
-		const { access_token, expires_in } = TokenResponseWireSchema.parse(await res.json());
+		const { access_token, expires_in } = await parseBody(res, TokenResponseWireSchema);
 		const session = await getSessionContext(access_token);
 		if (!session) {
 			throw new IdentityError('internal', 500, 'identity rejected the token it just issued');
@@ -175,7 +191,7 @@ export function createIdentityClient(options: IdentityClientOptions = {}): Ident
 			}
 			const target = canonicalRedirectUri(input);
 			const result = await exchangeCode(code, target.toString());
-			return { ...result, redirectTo: target.pathname + target.search };
+			return { ...result, redirectTo: target.href };
 		}
 	};
 }

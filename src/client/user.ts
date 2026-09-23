@@ -1,5 +1,5 @@
-import type { Attributes } from './attributes';
-import type { VatsimProfile } from './vatsim';
+import type { Attributes } from './attributes.js';
+import type { VatsimProfile } from './vatsim.js';
 
 export type User = {
 	id: string;

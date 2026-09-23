@@ -64,6 +64,10 @@ export function getIdentityErrorCode(e: unknown): ErrorCode | null {
 	return name.slice('IdentityError:'.length) as ErrorCode;
 }
 
+export function isErrorCode(value: unknown): value is ErrorCode {
+	return typeof value === 'string' && Object.hasOwn(STATUS_BY_CODE, value);
+}
+
 export function getStatusForCode(code: ErrorCode): number {
 	return STATUS_BY_CODE[code];
 }

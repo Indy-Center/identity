@@ -121,12 +121,43 @@ describe('IdentityClient against the worker', () => {
 			`http://localhost:5173/kind?tab=1&code=${code}&state=ignored`
 		);
 		expect(login).not.toBeNull();
-		expect(login!.redirectTo).toBe('/kind?tab=1');
+		expect(login!.redirectTo).toBe('http://localhost:5173/kind?tab=1');
 		expect(login!.session.user.cid).toBe('25');
 		expect(login!.expiresAt).toBeInstanceOf(Date);
 		expect((await validateSession(makeDb(env.DB), login!.token))?.expiresAt).toBeGreaterThan(
 			Date.now()
 		);
+	});
+
+	// A path starting with // or \\ would make `pathname + search` a
+	// protocol-relative URL that a server redirect follows off-site.
+	it.each([
+		['//evil.com/x', 'https://charts.flyindycenter.com//evil.com/x'],
+		['\\\\evil.com', 'https://charts.flyindycenter.com//evil.com']
+	])('completeLogin keeps redirectTo on the consumer origin for %s', async (path, bound) => {
+		const code = await seedCode('26', bound);
+		const login = await makeClient().completeLogin(
+			`https://charts.flyindycenter.com${path}?code=${code}`
+		);
+		expect(login!.redirectTo.startsWith('https://charts.flyindycenter.com/')).toBe(true);
+		expect(login!.redirectTo.startsWith('//')).toBe(false);
+		expect(new URL(login!.redirectTo).origin).toBe('https://charts.flyindycenter.com');
+	});
+
+	it('round-trips loginUrl through /oauth/authorize and completeLogin', async () => {
+		const token = await seedSession('27');
+		const identity = makeClient();
+		const authorize = await exports.default.fetch(
+			new Request(identity.loginUrl('https://charts.flyindycenter.com/kind?tab=1'), {
+				headers: { Cookie: `__Host-identity_session=${token}` },
+				redirect: 'manual'
+			})
+		);
+		const location = authorize.headers.get('Location');
+		expect(location).not.toBeNull();
+		const login = await identity.completeLogin(location!);
+		expect(login!.session.user.cid).toBe('27');
+		expect(login!.redirectTo).toBe('https://charts.flyindycenter.com/kind?tab=1');
 	});
 });
 
@@ -184,12 +215,43 @@ describe('IdentityClient request details', () => {
 		expect(seen[0]!.method).toBe('POST');
 		expect(seen[0]!.url).toBe('https://auth.flyindycenter.com/oauth/token');
 		expect(seen[0]!.headers.get('Content-Type')).toBe('application/x-www-form-urlencoded');
-		expect(Object.fromEntries(new URLSearchParams(await seen[0]!.text()))).toEqual({
+		expect(Object.fromEntries(await seen[0]!.formData())).toEqual({
 			grant_type: 'authorization_code',
 			code: 'c1',
 			redirect_uri: 'http://localhost:5173/',
 			client_id: 'indy-center-app'
 		});
+	});
+
+	function json(body: unknown, status: number) {
+		return () =>
+			new Response(JSON.stringify(body), {
+				status,
+				headers: { 'content-type': 'application/json' }
+			});
+	}
+
+	it('maps a malformed 2xx body to IdentityError internal', async () => {
+		const { client } = recording(json({ nope: true }, 200));
+		const err = await caught(client.getSessionContext('abc'));
+		expect(err).toBeInstanceOf(IdentityError);
+		expect((err as IdentityError).code).toBe('internal');
+		expect((err as IdentityError).status).toBe(200);
+	});
+
+	it('maps a non-JSON 2xx body to IdentityError internal', async () => {
+		const { client } = recording(() => new Response('<html>', { status: 200 }));
+		const err = await caught(client.exchangeCode('c1', 'http://localhost:5173/'));
+		expect(err).toBeInstanceOf(IdentityError);
+		expect((err as IdentityError).code).toBe('internal');
+	});
+
+	it('maps an unknown envelope code to internal', async () => {
+		const { client } = recording(json({ error: { code: 'made_up', message: 'huh' } }, 418));
+		const err = await caught(client.getSessionContext('abc'));
+		expect(err).toBeInstanceOf(IdentityError);
+		expect((err as IdentityError).code).toBe('internal');
+		expect((err as IdentityError).status).toBe(418);
 	});
 });
 
@@ -207,6 +269,13 @@ describe('IdentityClient URL builders and cookie helper', () => {
 			client.loginUrl('https://charts.flyindycenter.com/kind?a=1&code=old&state=s#top')
 		);
 		expect(url.searchParams.get('redirect_uri')).toBe('https://charts.flyindycenter.com/kind?a=1');
+	});
+
+	it('canonicalizes host case, default port and spaces in the redirect URI', () => {
+		const url = new URL(client.loginUrl('https://CHARTS.flyindycenter.com:443/a b?q=a+b#frag'));
+		expect(url.searchParams.get('redirect_uri')).toBe(
+			'https://charts.flyindycenter.com/a%20b?q=a+b'
+		);
 	});
 
 	it('honors publicUrl and clientId', () => {

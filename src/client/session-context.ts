@@ -1,7 +1,7 @@
 // src/client/session-context.ts
-import type { User } from './user';
-import type { OnlineController } from './online-controller';
-import type { FlightPlan } from './flight-plan';
+import type { User } from './user.js';
+import type { OnlineController } from './online-controller.js';
+import type { FlightPlan } from './flight-plan.js';
 
 export type SessionContext = {
 	user: User;

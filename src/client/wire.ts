@@ -3,10 +3,10 @@
 // HTTP transport in the client in ./client.ts (Task 8) parses with these
 // schemas. Kept together so the two sides cannot drift.
 import { z } from 'zod';
-import type { SessionContext } from './session-context';
-import type { User } from './user';
-import type { OnlineController } from './online-controller';
-import type { FlightPlan } from './flight-plan';
+import type { SessionContext } from './session-context.js';
+import type { User } from './user.js';
+import type { OnlineController } from './online-controller.js';
+import type { FlightPlan } from './flight-plan.js';
 
 /** SessionContext as JSON: identical except the Date is an ISO string. */
 export type SessionContextWire = Omit<SessionContext, 'sessionExpiresAt'> & {

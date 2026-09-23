@@ -16,6 +16,8 @@ const custom = createIdentityClient({
 	clientId: 'node-consumer'
 });
 
+export const withGlobalFetch = createIdentityClient({ fetch: globalThis.fetch });
+
 export const loginHref: string = identity.loginUrl('http://localhost:3000/');
 export const logoutHref: string = custom.logoutUrl('http://localhost:3000/');
 
