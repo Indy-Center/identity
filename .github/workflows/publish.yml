@@ -1,0 +1,44 @@
+name: Publish to npm
+
+# Manual. Bump `version` in package.json on main first; this job refuses to
+# publish a version that is already on the registry.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # push the release tag
+  id-token: write # npm trusted publishing (OIDC) and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+      # Trusted publishing needs npm >= 11.5.1; Node 22 ships an older npm.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - name: Refuse to republish an existing version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@indy-center/identity@$VERSION" version >/dev/null 2>&1; then
+            echo "@indy-center/identity@$VERSION is already published; bump the version first."
+            exit 1
+          fi
+          echo "PUBLISH_VERSION=$VERSION" >> "$GITHUB_ENV"
+      - run: npm run typecheck
+      - run: npm run check:dist
+      - run: npm run check:consumer
+      - run: npm test
+      # prepublishOnly rebuilds dist/ before packing.
+      - run: npm publish --provenance --access public
+      - name: Tag the release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v$PUBLISH_VERSION"
+          git push origin "v$PUBLISH_VERSION"
