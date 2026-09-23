@@ -19,8 +19,10 @@ import type {
 	Attributes,
 	AttributePatch,
 	OperatingInitials,
-	FlightPlan
+	FlightPlan,
+	ErrorCode
 } from '../../dist';
+import { IdentityError, getStatusForCode } from '../../dist';
 
 describe('published surface', () => {
 	it('exposes the expected types', () => {
@@ -52,5 +54,13 @@ describe('published surface', () => {
 		type _b = IdentityBinding;
 		expect(ctx).toBeDefined();
 		expect([c, p, v, u, vp, a, ap, oi, rpc, fp]).toHaveLength(10);
+	});
+
+	it('exposes IdentityError as a runtime export', () => {
+		const err = new IdentityError('invalid_code', 400, 'bad code');
+		expect(err.name).toBe('IdentityError:invalid_code');
+		expect(getStatusForCode('invalid_code')).toBe(400);
+		const code: ErrorCode = err.code;
+		expect(code).toBe('invalid_code');
 	});
 });
