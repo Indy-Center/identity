@@ -14,3 +14,13 @@ export {
 	getStatusForCode,
 	type ErrorCode
 } from './errors.js';
+export {
+	serializeSessionContext,
+	serializeUserinfo,
+	SessionContextWireSchema,
+	TokenResponseWireSchema,
+	OAuthErrorWireSchema,
+	ErrorWireSchema,
+	type SessionContextWire,
+	type UserinfoWire
+} from './wire.js';
