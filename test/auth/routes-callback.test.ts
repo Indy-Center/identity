@@ -73,7 +73,11 @@ describe('GET /login/callback', () => {
 		expect(identityCookie).toContain('Secure');
 		expect(identityCookie).toContain('Path=/');
 		expect(identityCookie).not.toContain('Domain=');
-		expect(setCookies.find((c) => c.startsWith('fic_session='))).toBeUndefined();
+
+		const legacyCookie = setCookies.find((c) => c.startsWith('fic_session=;'));
+		expect(legacyCookie).toBeDefined();
+		expect(legacyCookie).toContain('Domain=.flyindycenter.com');
+		expect(legacyCookie).toContain('Max-Age=0');
 		expect(setCookies.find((c) => c.startsWith('__Host-oauth_state='))).toContain('Max-Age=0');
 		expect(setCookies.find((c) => c.startsWith('__Host-oauth_return='))).toContain('Max-Age=0');
 

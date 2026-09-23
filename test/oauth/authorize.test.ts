@@ -2,7 +2,7 @@ import { env, exports } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDb } from '../../src/db';
 import { authorizationCodes, sessions, users } from '../../src/schema';
-import { upsertFromVatsim } from '../../src/users/domain';
+import { setUserActive, upsertFromVatsim } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
@@ -55,6 +55,13 @@ describe('GET /oauth/authorize — validation', () => {
 
 	it('400s without redirecting for response_type=token', async () => {
 		const res = await exports.default.fetch(authorizeUrl({ ...VALID, response_type: 'token' }), {
+			redirect: 'manual'
+		});
+		await expectErrorCode(res, 'validation_failed');
+	});
+
+	it('400s without redirecting for an over-long state', async () => {
+		const res = await exports.default.fetch(authorizeUrl({ ...VALID, state: 'x'.repeat(3000) }), {
 			redirect: 'manual'
 		});
 		await expectErrorCode(res, 'validation_failed');
@@ -126,6 +133,55 @@ describe('GET /oauth/authorize — with an identity session (SSO)', () => {
 		expect(codes).toHaveLength(1);
 		expect(codes[0]!.userId).toBe(userId);
 		expect(codes[0]!.redirectUri).toBe(REDIRECT);
+	});
+
+	it('clears the legacy fic_session cookie', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '5' }));
+		const { token } = await createSession(db, userId);
+
+		const res = await exports.default.fetch(authorizeUrl(VALID), {
+			redirect: 'manual',
+			headers: { Cookie: `__Host-identity_session=${token}` }
+		});
+		expect(res.status).toBe(302);
+
+		const legacyCookie = res.headers.getSetCookie().find((c) => c.startsWith('fic_session=;'));
+		expect(legacyCookie).toContain('Domain=.flyindycenter.com');
+		expect(legacyCookie).toContain('Max-Age=0');
+	});
+
+	it('400s and mints no code when the redirect_uri is disallowed, even with a valid session', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '6' }));
+		const { token } = await createSession(db, userId);
+
+		const res = await exports.default.fetch(
+			authorizeUrl({ ...VALID, redirect_uri: 'https://evil.com/' }),
+			{ redirect: 'manual', headers: { Cookie: `__Host-identity_session=${token}` } }
+		);
+		expect(res.status).toBe(400);
+		expect(res.headers.get('Location')).toBeNull();
+		const body = (await res.json()) as { error: { code: string } };
+		expect(body.error.code).toBe('invalid_return_url');
+
+		expect(await db.select().from(authorizationCodes).all()).toHaveLength(0);
+	});
+
+	it('falls through to VATSIM instead of minting a code for a disabled user', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '7' }));
+		const { token } = await createSession(db, userId);
+		await setUserActive(db, userId, false, { reason: 'test' });
+
+		const res = await exports.default.fetch(authorizeUrl(VALID), {
+			redirect: 'manual',
+			headers: { Cookie: `__Host-identity_session=${token}` }
+		});
+		expect(res.status).toBe(302);
+		expect(new URL(res.headers.get('Location')!).origin).toBe('https://auth.vatsim.net');
+
+		expect(await db.select().from(authorizationCodes).all()).toHaveLength(0);
 	});
 
 	it('omits state when the client sent none', async () => {

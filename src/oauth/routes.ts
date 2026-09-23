@@ -10,22 +10,28 @@ import { buildAuthorizationUrl } from '../auth/oauth';
 import { validateSession } from '../sessions/domain';
 import { createAuthorizationCode } from '../authorization-codes/domain';
 import { buildRedirectWithCode, isAllowedRedirectUri } from './redirect-uri';
+import { clearLegacySessionCookie } from '../auth/legacy-cookie';
 
 export const oauthRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
+const REDIRECT_URI_MAX_LENGTH = 2048;
 
 const AuthorizeQuerySchema = z.object({
 	response_type: z.literal('code'),
-	client_id: z.string().min(1),
-	state: z.string().optional()
+	client_id: z.string().min(1).max(2048),
+	state: z.string().max(1024).optional()
 });
 
 oauthRoutes.get('/authorize', async (c) => {
 	// Validate the redirect target first: every later failure is reported to
 	// the browser here, never by redirecting to an unvalidated URI.
 	const redirectUri = c.req.query('redirect_uri');
-	if (!redirectUri || !isAllowedRedirectUri(redirectUri)) {
+	if (
+		!redirectUri ||
+		redirectUri.length > REDIRECT_URI_MAX_LENGTH ||
+		!isAllowedRedirectUri(redirectUri)
+	) {
 		throw new IdentityError(
 			'invalid_return_url',
 			400,
@@ -53,6 +59,7 @@ oauthRoutes.get('/authorize', async (c) => {
 		const session = await validateSession(db, existing);
 		if (session) {
 			const { code } = await createAuthorizationCode(db, session.userId, redirectUri);
+			clearLegacySessionCookie(c);
 			return c.redirect(buildRedirectWithCode(redirectUri, code, state), 302);
 		}
 		deleteCookie(c, 'identity_session', { prefix: 'host' });

@@ -13,6 +13,7 @@ import {
 	isAllowedRedirectUri,
 	validateReturnUrl
 } from '../oauth/redirect-uri';
+import { clearLegacySessionCookie } from './legacy-cookie';
 
 // Only /login/callback lives here: it is the redirect URI registered with
 // VATSIM Connect. Logins start at GET /oauth/authorize (src/oauth/routes.ts).
@@ -85,6 +86,11 @@ loginRoutes.get('/callback', async (c) => {
 		throw new IdentityError('access_denied', 403, 'account disabled');
 	}
 
+	// Mint the code before writing any cookies: if D1 fails here, the browser
+	// is left with no half-applied session or state cookies.
+	const { redirectUri, state } = authorizeRequest;
+	const { code: authorizationCode } = await createAuthorizationCode(db, user.id, redirectUri);
+
 	// identity's own session: lets /oauth/authorize skip VATSIM next time.
 	const { token } = await createSession(db, user.id);
 	setCookie(c, 'identity_session', token, {
@@ -95,9 +101,8 @@ loginRoutes.get('/callback', async (c) => {
 	});
 	deleteCookie(c, 'oauth_state', { prefix: 'host' });
 	deleteCookie(c, 'oauth_return', { prefix: 'host' });
+	clearLegacySessionCookie(c);
 
-	const { redirectUri, state } = authorizeRequest;
-	const { code: authorizationCode } = await createAuthorizationCode(db, user.id, redirectUri);
 	return c.redirect(buildRedirectWithCode(redirectUri, authorizationCode, state), 302);
 });
 
@@ -118,8 +123,7 @@ logoutRoutes.get('/', async (c) => {
 	}
 
 	deleteCookie(c, 'identity_session', { prefix: 'host' });
-	// Left by the pre-OAuth flow, which set the app session on the parent domain.
-	deleteCookie(c, 'fic_session', { domain: '.flyindycenter.com', path: '/', secure: true });
+	clearLegacySessionCookie(c);
 
 	return c.redirect(returnUrl, 302);
 });
