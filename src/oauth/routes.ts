@@ -39,9 +39,11 @@ function oauthError(c: Context<Env>, error: string, description: string) {
 
 // Bearer-only: cookies (identity's own or any legacy one) are never accepted
 // here, so a value sitting only in a cookie is treated as no token at all.
+const BEARER_PATTERN = /^Bearer\s+(\S+)$/i;
+
 function bearerToken(c: Context<Env>): string {
 	const header = c.req.header('Authorization') ?? '';
-	return header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+	return header.match(BEARER_PATTERN)?.[1] ?? '';
 }
 
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
@@ -107,19 +109,32 @@ oauthRoutes.get('/authorize', async (c) => {
 	return c.redirect(buildAuthorizationUrl(c.env, oauthState).toString(), 302);
 });
 
+// Hono's own c.req.parseBody() re-checks Content-Type against the raw header
+// case-sensitively, so it silently returns {} for a body whose Content-Type
+// we've already accepted case-insensitively below. Parse the form ourselves
+// instead of relying on it.
+function isFormContentType(c: Context<Env>): boolean {
+	const contentType = (c.req.header('Content-Type') ?? '').toLowerCase();
+	return contentType.startsWith('application/x-www-form-urlencoded');
+}
+
+async function parseFormBody(c: Context<Env>): Promise<Record<string, string>> {
+	const form = await c.req.formData();
+	return Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v)]));
+}
+
 const TokenRequestSchema = z.object({
 	grant_type: z.string().min(1),
-	code: z.string().min(1),
-	redirect_uri: z.string().min(1),
-	client_id: z.string().min(1)
+	code: z.string().min(1).max(2048),
+	redirect_uri: z.string().min(1).max(2048),
+	client_id: z.string().min(1).max(2048)
 });
 
 oauthRoutes.post('/token', async (c) => {
-	const contentType = c.req.header('Content-Type') ?? '';
-	if (!contentType.startsWith('application/x-www-form-urlencoded')) {
+	if (!isFormContentType(c)) {
 		return oauthError(c, 'invalid_request', 'body must be application/x-www-form-urlencoded');
 	}
-	const parsed = TokenRequestSchema.safeParse(await c.req.parseBody());
+	const parsed = TokenRequestSchema.safeParse(await parseFormBody(c));
 	if (!parsed.success) {
 		return oauthError(
 			c,
@@ -155,14 +170,24 @@ oauthRoutes.get('/userinfo', async (c) => {
 		c.header('WWW-Authenticate', 'Bearer error="invalid_token"');
 		return c.json({ error: 'invalid_token' }, 401);
 	}
+	c.header('Cache-Control', 'no-store');
 	return c.json(serializeUserinfo(ctx));
 });
 
-// RFC 7009: always 200, even for an unknown token.
+const RevokeRequestSchema = z.object({ token: z.string().max(2048).optional() });
+
+// RFC 7009: always 200, even for an unknown or invalid token — malformed
+// requests (wrong content type) are the one thing §2.2.1 lets us reject.
 oauthRoutes.post('/revoke', async (c) => {
-	const body = await c.req.parseBody();
-	if (typeof body.token === 'string' && body.token) {
-		await logout(c.env, body.token);
+	if (!isFormContentType(c)) {
+		return oauthError(c, 'invalid_request', 'body must be application/x-www-form-urlencoded');
+	}
+	const parsed = RevokeRequestSchema.safeParse(await parseFormBody(c));
+	if (!parsed.success) {
+		return oauthError(c, 'invalid_request', 'token must be a string');
+	}
+	if (parsed.data.token) {
+		await logout(c.env, parsed.data.token);
 	}
 	return c.body(null, 200);
 });

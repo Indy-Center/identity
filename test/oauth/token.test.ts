@@ -1,8 +1,9 @@
 import { env, exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { makeDb } from '../../src/db';
 import { authorizationCodes, sessions, users } from '../../src/schema';
-import { upsertFromVatsim } from '../../src/users/domain';
+import { setUserActive, upsertFromVatsim } from '../../src/users/domain';
 import { validateSession } from '../../src/sessions/domain';
 import { createAuthorizationCode } from '../../src/authorization-codes/domain';
 import { sha256Hex } from '../../src/crypto';
@@ -75,6 +76,10 @@ describe('POST /oauth/token', () => {
 
 		const db = makeDb(env.DB);
 		expect((await validateSession(db, body.access_token))?.userId).toBe(userId);
+
+		const [row] = await db.select().from(sessions).where(eq(sessions.userId, userId));
+		const expectedExpiresIn = (row!.expiresAt - Date.now()) / 1000;
+		expect(Math.abs(body.expires_in - expectedExpiresIn)).toBeLessThan(2);
 	});
 
 	it('rejects a second use with invalid_grant', async () => {
@@ -105,6 +110,13 @@ describe('POST /oauth/token', () => {
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 	});
 
+	it('rejects a code for a disabled user with invalid_grant', async () => {
+		const db = makeDb(env.DB);
+		const { userId, code } = await seedCode();
+		await setUserActive(db, userId, false, { reason: 'test' });
+		await expectOAuthError(await exchange(code), 'invalid_grant');
+	});
+
 	it('rejects an unsupported grant_type', async () => {
 		const { code } = await seedCode();
 		await expectOAuthError(
@@ -124,6 +136,24 @@ describe('POST /oauth/token', () => {
 			await postToken({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT }),
 			'invalid_request'
 		);
+	});
+
+	it('accepts a case-varied form Content-Type with parameters', async () => {
+		const { userId, code } = await seedCode();
+		const res = await exports.default.fetch(TOKEN_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'Application/X-WWW-Form-Urlencoded; charset=UTF-8' },
+			body: new URLSearchParams({
+				grant_type: 'authorization_code',
+				code,
+				redirect_uri: REDIRECT,
+				client_id: 'charts'
+			}).toString()
+		});
+		expect(res.status).toBe(200);
+		const db = makeDb(env.DB);
+		const body = (await res.json()) as { access_token: string };
+		expect((await validateSession(db, body.access_token))?.userId).toBe(userId);
 	});
 
 	it('rejects a JSON body with invalid_request', async () => {

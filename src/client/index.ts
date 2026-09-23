@@ -15,8 +15,6 @@ export {
 	type ErrorCode
 } from './errors.js';
 export {
-	serializeSessionContext,
-	serializeUserinfo,
 	SessionContextWireSchema,
 	TokenResponseWireSchema,
 	OAuthErrorWireSchema,

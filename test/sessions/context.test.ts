@@ -2,11 +2,9 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
 import { authorizationCodes, users, sessions, userRoles } from '../../src/schema';
-import { upsertFromVatsim, setUserActive } from '../../src/users/domain';
-import { createSession, validateSession } from '../../src/sessions/domain';
-import { exchangeCodeForSession, getSessionContext, logout } from '../../src/sessions/context';
-import { createAuthorizationCode } from '../../src/authorization-codes/domain';
-import { IdentityError } from '../../src/client/errors';
+import { upsertFromVatsim } from '../../src/users/domain';
+import { createSession } from '../../src/sessions/domain';
+import { getSessionContext, logout } from '../../src/sessions/context';
 import { makeVatsimProfile } from '../helpers/fixtures';
 import { __resetCacheForTests } from '../../src/online-controllers/domain';
 import type { OnlineController } from '../../src/online-controllers/types';
@@ -168,63 +166,5 @@ describe('getSessionContext', () => {
 		const ctx = await getSessionContext(env, token);
 		expect(ctx).not.toBeNull();
 		expect(ctx!.activeFlightPlan).toBeNull();
-	});
-});
-
-describe('exchangeCodeForSession', () => {
-	const REDIRECT = 'http://localhost:5173/';
-
-	it('returns a session for a fresh code', async () => {
-		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '3' }));
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
-		mockBothFeeds([], []);
-
-		const result = await exchangeCodeForSession(env, code, REDIRECT);
-		expect(result.token).toMatch(/^[a-z2-7]{32}$/);
-		expect(result.expiresAt).toBeInstanceOf(Date);
-		expect(result.session.user.cid).toBe('3');
-		expect((await validateSession(db, result.token))?.userId).toBe(userId);
-	});
-
-	it('throws IdentityError invalid_code on reuse', async () => {
-		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '4' }));
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
-		mockBothFeeds([], []);
-
-		await exchangeCodeForSession(env, code, REDIRECT);
-		await expect(exchangeCodeForSession(env, code, REDIRECT)).rejects.toMatchObject({
-			code: 'invalid_code',
-			status: 400
-		});
-		await expect(exchangeCodeForSession(env, code, REDIRECT)).rejects.toBeInstanceOf(IdentityError);
-	});
-
-	it('throws IdentityError invalid_code for a mismatched redirect URI', async () => {
-		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '6' }));
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
-
-		await expect(
-			exchangeCodeForSession(env, code, 'https://charts.flyindycenter.com/')
-		).rejects.toMatchObject({ code: 'invalid_code' });
-	});
-
-	it('throws IdentityError access_denied when the user was disabled before exchange', async () => {
-		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '8' }));
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
-		await setUserActive(db, userId, false, { reason: 'test' });
-		mockBothFeeds([], []);
-
-		expect.assertions(3);
-		try {
-			await exchangeCodeForSession(env, code, REDIRECT);
-		} catch (err) {
-			expect(err).toBeInstanceOf(IdentityError);
-			expect((err as IdentityError).code).toBe('access_denied');
-			expect((err as IdentityError).status).toBe(403);
-		}
 	});
 });

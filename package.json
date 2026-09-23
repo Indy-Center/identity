@@ -17,7 +17,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "cf-typegen": "wrangler types",
-    "build:lib": "tsc -p tsconfig.lib.json",
+    "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json",
     "prepublishOnly": "npm run build:lib",
     "pretest": "npm run build:lib",
     "test": "vitest run",

@@ -1,7 +1,7 @@
 // src/client/wire.ts
 // JSON shapes on the HTTP API. The server serializes with these helpers; the
-// HTTP transport in ./client parses with these schemas. Kept together so the
-// two sides cannot drift.
+// HTTP transport in the client in ./client.ts (Task 8) parses with these
+// schemas. Kept together so the two sides cannot drift.
 import { z } from 'zod';
 import type { SessionContext } from './session-context';
 import type { User } from './user';
@@ -25,7 +25,7 @@ export function serializeUserinfo(ctx: SessionContext): UserinfoWire {
 	return {
 		sub: ctx.user.id,
 		email: ctx.user.email,
-		name: name_full ?? [name_first, name_last].filter(Boolean).join(' '),
+		name: name_full || [name_first, name_last].filter(Boolean).join(' '),
 		...serializeSessionContext(ctx)
 	};
 }
@@ -34,10 +34,12 @@ const isObject = (v: unknown) => typeof v === 'object' && v !== null;
 
 // z.object strips unknown keys, so parsing a userinfo body (which adds sub,
 // email, name) yields a plain SessionContext.
+// user/activeSession/activeFlightPlan are nested objects trusted from the
+// server and not validated field-by-field.
 export const SessionContextWireSchema = z.object({
 	user: z.custom<User>(isObject),
 	roles: z.array(z.string()),
-	sessionExpiresAt: z.coerce.date(),
+	sessionExpiresAt: z.iso.datetime().transform((s) => new Date(s)),
 	activeSession: z.custom<OnlineController>(isObject).nullable(),
 	activeFlightPlan: z.custom<FlightPlan>(isObject).nullable()
 });

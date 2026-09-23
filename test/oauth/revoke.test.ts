@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
 import { sessions, users } from '../../src/schema';
 import { upsertFromVatsim } from '../../src/users/domain';
-import { createSession } from '../../src/sessions/domain';
+import { createSession, validateSession } from '../../src/sessions/domain';
 import { __resetCacheForTests } from '../../src/online-controllers/domain';
 import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/flight-plans/domain';
 import { makeVatsimProfile } from '../helpers/fixtures';
@@ -55,7 +55,36 @@ describe('POST /oauth/revoke', () => {
 	});
 
 	it('returns 200 with no token at all', async () => {
-		const res = await exports.default.fetch(`${BASE}/oauth/revoke`, { method: 'POST' });
+		const res = await exports.default.fetch(`${BASE}/oauth/revoke`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+		});
 		expect(res.status).toBe(200);
+	});
+
+	it('rejects a JSON body with invalid_request', async () => {
+		const res = await exports.default.fetch(`${BASE}/oauth/revoke`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ token: 'whatever' })
+		});
+		expect(res.status).toBe(400);
+		expect(res.headers.get('Cache-Control')).toBe('no-store');
+		const body = (await res.json()) as { error: string; error_description?: string };
+		expect(body.error).toBe('invalid_request');
+		expect(body.error_description).toBeTruthy();
+	});
+
+	it('revokes only the targeted session, leaving the other valid', async () => {
+		const db = makeDb(env.DB);
+		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
+		const { token: tokenA } = await createSession(db, userId);
+		const { token: tokenB } = await createSession(db, userId);
+
+		const res = await revoke(tokenA);
+		expect(res.status).toBe(200);
+
+		expect(await validateSession(db, tokenA)).toBeNull();
+		expect((await validateSession(db, tokenB))?.userId).toBe(userId);
 	});
 });

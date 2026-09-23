@@ -54,6 +54,7 @@ describe('GET /oauth/userinfo', () => {
 			headers: { Authorization: `Bearer ${token}` }
 		});
 		expect(res.status).toBe(200);
+		expect(res.headers.get('Cache-Control')).toBe('no-store');
 		const body = (await res.json()) as {
 			sub: string;
 			email: string;
@@ -99,6 +100,20 @@ describe('GET /oauth/userinfo', () => {
 		await expectInvalidToken(
 			await exports.default.fetch(USERINFO, { headers: { Authorization: 'Bearer nope' } })
 		);
+	});
+
+	it('401s with invalid_token for an empty bearer token', async () => {
+		await expectInvalidToken(
+			await exports.default.fetch(USERINFO, { headers: { Authorization: 'Bearer ' } })
+		);
+	});
+
+	it('accepts a lower-case "bearer" scheme', async () => {
+		const { token } = await seed();
+		const res = await exports.default.fetch(USERINFO, {
+			headers: { Authorization: `bearer ${token}` }
+		});
+		expect(res.status).toBe(200);
 	});
 
 	it('ignores cookies: a valid token in a cookie alone is 401', async () => {

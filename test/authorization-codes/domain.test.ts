@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
 import { authorizationCodes, sessions, users } from '../../src/schema';
-import { upsertFromVatsim } from '../../src/users/domain';
+import { setUserActive, upsertFromVatsim } from '../../src/users/domain';
 import { validateSession } from '../../src/sessions/domain';
 import {
 	AUTHORIZATION_CODE_LIFETIME_MS,
@@ -78,6 +78,16 @@ describe('authorization codes', () => {
 	it('rejects an unknown code', async () => {
 		const db = makeDb(env.DB);
 		expect(await exchangeAuthorizationCode(db, 'nope', REDIRECT)).toBeNull();
+	});
+
+	it('rejects a code for a user disabled since it was issued, and creates no session', async () => {
+		const db = makeDb(env.DB);
+		const userId = await seedUser();
+		const { code } = await createAuthorizationCode(db, userId, REDIRECT);
+		await setUserActive(db, userId, false, { reason: 'test' });
+
+		expect(await exchangeAuthorizationCode(db, code, REDIRECT)).toBeNull();
+		expect(await db.select().from(sessions).all()).toHaveLength(0);
 	});
 
 	it('rejects an expired code and prunes it', async () => {
