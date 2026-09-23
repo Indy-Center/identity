@@ -19,6 +19,7 @@
     "vitest.config.ts",
     "drizzle.config.ts",
     "scripts/**/*.ts",
+    "test/published-surface/node-consumer.ts",
     "node_modules"
   ]
 }

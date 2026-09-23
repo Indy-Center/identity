@@ -20,7 +20,7 @@ import type {
 	FlightPlan,
 	ErrorCode
 } from '../../dist';
-import { IdentityError, getStatusForCode } from '../../dist';
+import { IdentityError, getStatusForCode, createIdentityClient, SESSION_COOKIE } from '../../dist';
 
 describe('published surface', () => {
 	it('exposes the expected types', () => {
@@ -53,5 +53,11 @@ describe('published surface', () => {
 		expect(getStatusForCode('invalid_code')).toBe(400);
 		const code: ErrorCode = err.code;
 		expect(code).toBe('invalid_code');
+	});
+
+	it('exposes the client factory as a runtime export', () => {
+		const client = createIdentityClient();
+		expect(client.loginUrl('http://localhost:5173/')).toContain('/oauth/authorize?');
+		expect(SESSION_COOKIE).toBe('fic_session');
 	});
 });

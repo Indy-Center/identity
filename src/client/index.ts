@@ -1,5 +1,5 @@
 // src/client/index.ts
-// Public surface of @indy-center/identity 1.0.0.
+// Public surface of @indy-center/identity 1.1.0.
 
 export type { SessionContext } from './session-context';
 export type { OnlineController, VnasPosition, VnasVatsimData } from './online-controller';
@@ -22,3 +22,15 @@ export {
 	type SessionContextWire,
 	type UserinfoWire
 } from './wire.js';
+export {
+	createIdentityClient,
+	sessionCookieOptions,
+	DEFAULT_IDENTITY_URL,
+	DEFAULT_CLIENT_ID,
+	SESSION_COOKIE,
+	type IdentityClient,
+	type IdentityClientOptions,
+	type ExchangedSession,
+	type CompletedLogin,
+	type FetchLike
+} from './client.js';

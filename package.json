@@ -18,6 +18,8 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "cf-typegen": "wrangler types",
     "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json",
+    "check:dist": "node scripts/check-dist.mjs",
+    "check:consumer": "tsc -p tsconfig.consumer.json",
     "prepublishOnly": "npm run build:lib",
     "pretest": "npm run build:lib",
     "test": "vitest run",
