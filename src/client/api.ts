@@ -11,19 +11,17 @@ import type { SessionContext } from './session-context';
  */
 export interface IdentityRpc extends Rpc.WorkerEntrypointBranded {
 	/**
-	 * Validate a session token and return the joined view a consumer typically
-	 * needs to render an authenticated request: the user record, the user's
-	 * role grants, the session's expiry, and the user's current vNAS controlling
-	 * session (or `null` if not currently online).
+	 * Validate a session token and return the joined view a consumer needs to
+	 * render an authenticated request: user, roles, session expiry, current
+	 * vNAS controlling session and current filed flight plan.
 	 *
-	 * Returns `null` for unknown, expired, or invalidated tokens.
-	 *
-	 * The active-session lookup is backed by an in-memory snapshot of the public
-	 * vNAS controllers feed with a 15-second TTL and singleflight; it adds at
-	 * most one upstream HTTP fetch per isolate per 15 seconds, and degrades to
-	 * `null` when the feed is unavailable.
+	 * Returns `null` for unknown, expired, or invalidated tokens. Applies the
+	 * sliding-refresh rule to the session.
 	 */
 	getSessionContext(token: string): Promise<SessionContext | null>;
+
+	/** Invalidate a session token. No-op for unknown tokens. */
+	logout(token: string): Promise<void>;
 }
 
 /**

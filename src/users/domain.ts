@@ -3,7 +3,7 @@ import { sessions, users, userRoles } from '../schema';
 import type { DB } from '../db';
 import type { AttributePatch } from '../client/attributes';
 import { AttributePatchSchema } from './attributes-schema';
-import { IdentityError } from '../lib/errors';
+import { IdentityError } from '../client/errors';
 import type { User } from '../client/user';
 import type { VatsimProfile } from '../client/vatsim';
 

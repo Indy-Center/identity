@@ -7,7 +7,7 @@ import { createSession, deleteSessionByToken } from '../sessions/domain';
 import { upsertFromVatsim } from '../users/domain';
 import { fetchVatsimProfile } from './vatsim';
 import { randomBase32 } from '../crypto';
-import { IdentityError } from '../lib/errors';
+import { IdentityError } from '../client/errors';
 
 export const loginRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 

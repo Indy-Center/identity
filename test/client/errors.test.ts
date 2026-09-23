@@ -4,7 +4,7 @@ import {
 	isIdentityError,
 	getIdentityErrorCode,
 	getStatusForCode
-} from '../../src/lib/errors';
+} from '../../src/client/errors';
 
 describe('IdentityError', () => {
 	it('carries code, status, message internally', () => {

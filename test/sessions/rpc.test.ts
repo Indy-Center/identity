@@ -48,22 +48,17 @@ function mockBothFeeds(
 	});
 }
 
-describe('rpc/sessions', () => {
-	it('invalidateSession deletes the row', async () => {
+describe('rpc/logout', () => {
+	it('deletes the session row', async () => {
 		const db = makeDb(env.DB);
 		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
 		const { token } = await createSession(db, userId);
-		await env.IDENTITY.invalidateSession(token);
+		await env.IDENTITY.logout(token);
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 	});
 
-	it('invalidateUserSessions deletes all sessions for a user', async () => {
-		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
-		await createSession(db, userId);
-		await createSession(db, userId);
-		await env.IDENTITY.invalidateUserSessions(userId);
-		expect(await db.select().from(sessions).all()).toHaveLength(0);
+	it('is a no-op for an unknown token', async () => {
+		await expect(env.IDENTITY.logout('nope')).resolves.toBeUndefined();
 	});
 });
 
@@ -78,7 +73,7 @@ describe('rpc/getSessionContext', () => {
 		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '5' }));
 		const { token } = await createSession(db, userId);
 		mockBothFeeds([], []);
-		await env.IDENTITY.invalidateSession(token);
+		await env.IDENTITY.logout(token);
 		expect(await env.IDENTITY.getSessionContext(token)).toBeNull();
 	});
 

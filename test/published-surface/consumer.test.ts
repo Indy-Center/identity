@@ -47,7 +47,8 @@ describe('published surface', () => {
 		const rpc = {
 			async getSessionContext() {
 				return null;
-			}
+			},
+			async logout() {}
 		} as unknown as IdentityRpc;
 		const fp: FlightPlan = { departure: 'KIND', arrival: 'KORD' };
 		// IdentityBinding can't be constructed but should be assignable from any Service<IdentityRpc>.
