@@ -17,9 +17,7 @@ export default defineConfig(async () => {
 						CONNECT_CLIENT_ID: 'test_client_id',
 						CONNECT_CLIENT_SECRET: 'test_client_secret',
 						CONNECT_BASE_URL: 'https://auth.vatsim.net',
-						CONNECT_CALLBACK_URL: 'https://auth.flyindycenter.com/login/callback',
-						COOKIE_DOMAIN: '.flyindycenter.com',
-						COOKIE_SECURE: 'true'
+						CONNECT_CALLBACK_URL: 'https://auth.flyindycenter.com/login/callback'
 					}
 				}
 			})

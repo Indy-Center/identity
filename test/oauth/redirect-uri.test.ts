@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	buildRedirectWithCode,
 	isAllowedOrigin,
 	isAllowedRedirectUri,
 	validateReturnUrl
@@ -96,5 +97,20 @@ describe('validateReturnUrl', () => {
 			expect((e as IdentityError).code).toBe('invalid_return_url');
 			expect((e as IdentityError).status).toBe(400);
 		}
+	});
+});
+
+describe('buildRedirectWithCode', () => {
+	it('appends code and keeps existing query parameters', () => {
+		const url = new URL(buildRedirectWithCode('http://localhost:5173/x?y=1', 'abc'));
+		expect(url.origin + url.pathname).toBe('http://localhost:5173/x');
+		expect(url.searchParams.get('y')).toBe('1');
+		expect(url.searchParams.get('code')).toBe('abc');
+		expect(url.searchParams.has('state')).toBe(false);
+	});
+
+	it('echoes state when given', () => {
+		const url = new URL(buildRedirectWithCode('https://charts.flyindycenter.com/', 'abc', 's1'));
+		expect(url.searchParams.get('state')).toBe('s1');
 	});
 });

@@ -5,5 +5,3 @@ CONNECT_CLIENT_ID=
 CONNECT_CLIENT_SECRET=
 CONNECT_BASE_URL=https://auth-dev.vatsim.net
 CONNECT_CALLBACK_URL=http://localhost:8787/login/callback
-COOKIE_DOMAIN=localhost
-COOKIE_SECURE=false

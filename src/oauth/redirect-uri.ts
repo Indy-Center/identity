@@ -33,3 +33,13 @@ export function validateReturnUrl(raw: string | undefined): string {
 	}
 	return raw;
 }
+
+/** The URL identity redirects to after login: `redirectUri` plus `code` (and `state`). */
+export function buildRedirectWithCode(redirectUri: string, code: string, state?: string): string {
+	const url = new URL(redirectUri);
+	url.searchParams.set('code', code);
+	if (state !== undefined) {
+		url.searchParams.set('state', state);
+	}
+	return url.toString();
+}

@@ -7,6 +7,10 @@ import { upsertFromVatsim } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
+const LOGOUT =
+	'https://auth.flyindycenter.com/logout?return_url=' +
+	encodeURIComponent('https://charts.flyindycenter.com/');
+
 beforeEach(async () => {
 	const db = makeDb(env.DB);
 	await db.delete(userRoles);
@@ -15,49 +19,70 @@ beforeEach(async () => {
 });
 
 describe('GET /logout', () => {
-	it('clears the session cookie and redirects to the validated return_url', async () => {
+	it("ends every session of the user named by identity's cookie and redirects", async () => {
 		const db = makeDb(env.DB);
 		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
-		const { token } = await createSession(db, userId);
+		const { id: otherId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
+		const identitySession = await createSession(db, userId);
+		await createSession(db, userId); // an app's session for the same user
+		await createSession(db, otherId); // someone else's, must survive
 
-		const req = new Request(
-			'https://identity.flyindycenter.com/logout?return_url=https://charts.flyindycenter.com/',
-			{
-				headers: { cookie: `fic_session=${token}` },
-				redirect: 'manual'
-			}
-		);
-		const res = await exports.default.fetch(req);
+		const res = await exports.default.fetch(LOGOUT, {
+			redirect: 'manual',
+			headers: { Cookie: `__Host-identity_session=${identitySession.token}` }
+		});
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get('location')).toBe('https://charts.flyindycenter.com/');
-		const setCookie = res.headers.get('set-cookie') ?? '';
-		expect(setCookie).toMatch(/^fic_session=;/);
-		expect(setCookie.toLowerCase()).toContain('max-age=0');
+		expect(res.headers.get('Location')).toBe('https://charts.flyindycenter.com/');
 
-		// Session row is gone.
-		const rows = await db.select().from(sessions).all();
-		expect(rows).toHaveLength(0);
+		const setCookies = res.headers.getSetCookie();
+		const cleared = setCookies.find((c) => c.startsWith('__Host-identity_session='));
+		expect(cleared).toMatch(/^__Host-identity_session=;/);
+		expect(cleared).toContain('Max-Age=0');
+		const legacy = setCookies.find((c) => c.startsWith('fic_session='));
+		expect(legacy).toContain('Domain=.flyindycenter.com');
+		expect(legacy).toContain('Max-Age=0');
+
+		const remaining = await db.select().from(sessions).all();
+		expect(remaining).toHaveLength(1);
+		expect(remaining[0]!.userId).toBe(otherId);
 	});
 
-	it('rejects an off-domain return_url', async () => {
-		const req = new Request(
-			'https://identity.flyindycenter.com/logout?return_url=https://evil.com/',
-			{
-				method: 'GET'
-			}
-		);
-		const res = await exports.default.fetch(req);
-		expect(res.status).toBe(400);
+	it('still clears cookies and redirects when no cookie is present', async () => {
+		const res = await exports.default.fetch(LOGOUT, { redirect: 'manual' });
+		expect(res.status).toBe(302);
+		expect(res.headers.get('Location')).toBe('https://charts.flyindycenter.com/');
 	});
 
-	it('is a no-op when no cookie is present, still redirects', async () => {
-		const req = new Request(
-			'https://identity.flyindycenter.com/logout?return_url=https://charts.flyindycenter.com/',
+	it('still redirects for an unknown identity cookie', async () => {
+		const res = await exports.default.fetch(LOGOUT, {
+			redirect: 'manual',
+			headers: { Cookie: '__Host-identity_session=unknown' }
+		});
+		expect(res.status).toBe(302);
+	});
+
+	it('accepts a loopback return_url', async () => {
+		const res = await exports.default.fetch(
+			'https://auth.flyindycenter.com/logout?return_url=' +
+				encodeURIComponent('http://localhost:5173/'),
 			{ redirect: 'manual' }
 		);
-		const res = await exports.default.fetch(req);
 		expect(res.status).toBe(302);
-		expect(res.headers.get('location')).toBe('https://charts.flyindycenter.com/');
+		expect(res.headers.get('Location')).toBe('http://localhost:5173/');
+	});
+
+	it('400s for an off-domain or missing return_url', async () => {
+		const offDomain = await exports.default.fetch(
+			'https://auth.flyindycenter.com/logout?return_url=https://evil.com/',
+			{ redirect: 'manual' }
+		);
+		expect(offDomain.status).toBe(400);
+		const missing = await exports.default.fetch('https://auth.flyindycenter.com/logout', {
+			redirect: 'manual'
+		});
+		expect(missing.status).toBe(400);
+		const body = (await missing.json()) as { error: { code: string } };
+		expect(body.error.code).toBe('invalid_return_url');
 	});
 });

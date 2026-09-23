@@ -2,22 +2,27 @@ import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { makeDb } from '../db';
-import { buildAuthorizationUrl, exchangeCodeForToken } from './oauth';
-import { createSession, deleteSessionByToken } from '../sessions/domain';
+import { exchangeCodeForToken } from './oauth';
+import { createSession, deleteAllSessionsForUser, findSessionByToken } from '../sessions/domain';
 import { upsertFromVatsim } from '../users/domain';
 import { fetchVatsimProfile } from './vatsim';
-import { randomBase32 } from '../crypto';
 import { IdentityError } from '../client/errors';
-import { validateReturnUrl } from '../oauth/redirect-uri';
+import { createAuthorizationCode } from '../authorization-codes/domain';
+import {
+	buildRedirectWithCode,
+	isAllowedRedirectUri,
+	validateReturnUrl
+} from '../oauth/redirect-uri';
 
+// Only /login/callback lives here: it is the redirect URI registered with
+// VATSIM Connect. Logins start at GET /oauth/authorize (src/oauth/routes.ts).
 export const loginRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
 
 // Bundles every required piece of input on the OAuth callback: the `code`
 // and `state` from VATSIM's redirect query, plus the `oauth_state` cookie
-// we wrote during /login. The .refine() enforces CSRF protection — the
+// written by /oauth/authorize. The .refine() enforces CSRF protection — the
 // state in the query must match the state in the cookie.
 const CallbackInputSchema = z
 	.object({
@@ -27,25 +32,24 @@ const CallbackInputSchema = z
 	})
 	.refine((d) => d.state === d.stateCookie, { message: 'state cookie mismatch' });
 
-loginRoutes.get('/', (c) => {
-	const returnUrl = validateReturnUrl(c.req.query('return_url'));
-	const state = randomBase32(16);
-	const authorizeUrl = buildAuthorizationUrl(c.env, state);
-
-	setCookie(c, 'oauth_state', state, {
-		prefix: 'host',
-		httpOnly: true,
-		sameSite: 'Lax',
-		maxAge: OAUTH_STATE_MAX_AGE_SECONDS
-	});
-	setCookie(c, 'oauth_return', returnUrl, {
-		prefix: 'host',
-		httpOnly: true,
-		sameSite: 'Lax',
-		maxAge: OAUTH_STATE_MAX_AGE_SECONDS
-	});
-	return c.redirect(authorizeUrl.toString(), 302);
+// The authorize request /oauth/authorize stored in __Host-oauth_return.
+const ReturnCookieSchema = z.object({
+	redirectUri: z.string().refine(isAllowedRedirectUri),
+	clientId: z.string().min(1),
+	state: z.string().optional()
 });
+
+function parseReturnCookie(raw: string | undefined): z.infer<typeof ReturnCookieSchema> | null {
+	if (!raw) {
+		return null;
+	}
+	try {
+		const parsed = ReturnCookieSchema.safeParse(JSON.parse(raw));
+		return parsed.success ? parsed.data : null;
+	} catch {
+		return null;
+	}
+}
 
 loginRoutes.get('/callback', async (c) => {
 	const parsed = CallbackInputSchema.safeParse({
@@ -57,12 +61,12 @@ loginRoutes.get('/callback', async (c) => {
 		throw new IdentityError('invalid_state', 400, 'OAuth state cookie missing or mismatched');
 	}
 	const { code } = parsed.data;
-	const returnCookie = getCookie(c, 'oauth_return', 'host');
-	if (!returnCookie) {
+	const authorizeRequest = parseReturnCookie(getCookie(c, 'oauth_return', 'host'));
+	if (!authorizeRequest) {
 		throw new IdentityError(
 			'invalid_state',
 			400,
-			'oauth_return cookie missing — login flow must include return_url'
+			'oauth_return cookie missing or malformed — start the login at /oauth/authorize'
 		);
 	}
 
@@ -80,39 +84,42 @@ loginRoutes.get('/callback', async (c) => {
 	if (!user.isActive) {
 		throw new IdentityError('access_denied', 403, 'account disabled');
 	}
-	const { token } = await createSession(db, user.id);
 
-	setCookie(c, 'fic_session', token, {
-		domain: c.env.COOKIE_DOMAIN === 'localhost' ? undefined : c.env.COOKIE_DOMAIN,
-		path: '/',
+	// identity's own session: lets /oauth/authorize skip VATSIM next time.
+	const { token } = await createSession(db, user.id);
+	setCookie(c, 'identity_session', token, {
+		prefix: 'host',
 		httpOnly: true,
-		secure: c.env.COOKIE_SECURE === 'true',
 		sameSite: 'Lax',
 		maxAge: SESSION_MAX_AGE_SECONDS
 	});
 	deleteCookie(c, 'oauth_state', { prefix: 'host' });
 	deleteCookie(c, 'oauth_return', { prefix: 'host' });
 
-	return c.redirect(returnCookie, 302);
+	const { redirectUri, state } = authorizeRequest;
+	const { code: authorizationCode } = await createAuthorizationCode(db, user.id, redirectUri);
+	return c.redirect(buildRedirectWithCode(redirectUri, authorizationCode, state), 302);
 });
 
 export const logoutRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
+// Global sign-out: ends every session the user has (identity's and every
+// app's), then returns the browser to return_url.
 logoutRoutes.get('/', async (c) => {
 	const returnUrl = validateReturnUrl(c.req.query('return_url'));
 
-	const token = getCookie(c, 'fic_session');
+	const token = getCookie(c, 'identity_session', 'host');
 	if (token) {
 		const db = makeDb(c.env.DB);
-		await deleteSessionByToken(db, token);
+		const session = await findSessionByToken(db, token);
+		if (session) {
+			await deleteAllSessionsForUser(db, session.userId);
+		}
 	}
 
-	deleteCookie(c, 'fic_session', {
-		domain: c.env.COOKIE_DOMAIN,
-		path: '/',
-		secure: c.env.COOKIE_SECURE === 'true',
-		sameSite: 'Lax'
-	});
+	deleteCookie(c, 'identity_session', { prefix: 'host' });
+	// Left by the pre-OAuth flow, which set the app session on the parent domain.
+	deleteCookie(c, 'fic_session', { domain: '.flyindycenter.com', path: '/', secure: true });
 
 	return c.redirect(returnUrl, 302);
 });
