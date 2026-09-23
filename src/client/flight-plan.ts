@@ -1,7 +1,9 @@
 // src/client/flight-plan.ts
 // Mirrors the VATSIM datafeed (https://data.vatsim.net/v3/vatsim-data.json)
 // flight_plan shape. Required fields are limited to the airport identifiers;
-// everything else is optional and loosely typed.
+// everything else is optional. Runtime accepts unknown extra fields via Zod's
+// `z.looseObject` in src/flight-plans/schema; the type only exposes what
+// consumers should rely on.
 
 export type FlightPlan = {
 	flight_rules?: string;
@@ -18,5 +20,4 @@ export type FlightPlan = {
 	fuel_time?: string;
 	remarks?: string;
 	route?: string;
-	[key: string]: unknown;
 };

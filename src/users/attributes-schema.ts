@@ -1,6 +1,20 @@
 import { z } from 'zod';
+import type { AttributeValue } from '../client/attributes';
 
 export const OperatingInitialsSchema = z.string().regex(/^[A-Z]{2}$/);
+
+// Mirrors the public `AttributeValue` type: JSON only, so namespaced catchall
+// keys stay serializable across RPC and HTTP.
+export const AttributeValueSchema: z.ZodType<AttributeValue> = z.lazy(() =>
+	z.union([
+		z.string(),
+		z.number(),
+		z.boolean(),
+		z.null(),
+		z.array(AttributeValueSchema),
+		z.record(z.string(), AttributeValueSchema)
+	])
+);
 
 export const AttributesSchema = z
 	.object({
@@ -12,7 +26,7 @@ export const AttributesSchema = z
 		disabledAt: z.number().optional(),
 		disabledBy: z.string().optional()
 	})
-	.catchall(z.unknown());
+	.catchall(AttributeValueSchema);
 
 export const AttributePatchSchema = z
 	.object({
@@ -24,4 +38,4 @@ export const AttributePatchSchema = z
 		disabledAt: z.number().nullable().optional(),
 		disabledBy: z.string().nullable().optional()
 	})
-	.catchall(z.unknown());
+	.catchall(AttributeValueSchema);

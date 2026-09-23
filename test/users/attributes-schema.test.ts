@@ -51,6 +51,26 @@ describe('AttributesSchema', () => {
 		});
 		expect(v['community.profileColor']).toBe('blue');
 	});
+
+	it('accepts nested JSON values in catchall keys', () => {
+		const v = AttributesSchema.parse({
+			'community.profile': {
+				color: 'blue',
+				tags: ['a', 'b'],
+				nested: { n: 1, ok: true, none: null }
+			}
+		});
+		expect(v['community.profile']).toEqual({
+			color: 'blue',
+			tags: ['a', 'b'],
+			nested: { n: 1, ok: true, none: null }
+		});
+	});
+
+	it('rejects non-JSON values in catchall keys', () => {
+		expect(() => AttributesSchema.parse({ 'community.fn': () => 1 })).toThrow();
+		expect(() => AttributesSchema.parse({ 'community.date': new Date() })).toThrow();
+	});
 });
 
 describe('AttributePatchSchema', () => {

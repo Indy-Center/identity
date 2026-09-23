@@ -8,7 +8,6 @@ export type VnasVatsimData = {
 	userRating: string;
 	callsign: string;
 	loginTime?: string;
-	[key: string]: unknown;
 };
 
 export type VnasPosition = {
@@ -23,7 +22,6 @@ export type VnasPosition = {
 	isPrimary: boolean;
 	isActive: boolean;
 	callsign?: string;
-	[key: string]: unknown;
 };
 
 export type OnlineController = {
@@ -36,5 +34,4 @@ export type OnlineController = {
 	isObserver: boolean;
 	loginTime: string;
 	vatsimData: VnasVatsimData;
-	[key: string]: unknown;
 };

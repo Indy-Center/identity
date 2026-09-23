@@ -7,4 +7,4 @@ export type { OnlineController, VnasPosition, VnasVatsimData } from './online-co
 export type { FlightPlan } from './flight-plan';
 export type { User } from './user';
 export type { VatsimProfile } from './vatsim';
-export type { Attributes, AttributePatch, OperatingInitials } from './attributes';
+export type { Attributes, AttributePatch, AttributeValue, OperatingInitials } from './attributes';

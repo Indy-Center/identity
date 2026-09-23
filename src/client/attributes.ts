@@ -3,6 +3,18 @@
 
 export type OperatingInitials = string; // /^[A-Z]{2}$/
 
+// JSON-compatible value for namespaced catchall keys (e.g. 'community.profile').
+// Concrete rather than `unknown` so that Attributes/AttributePatch — and the
+// SessionContext that embeds them — pass Cloudflare's RPC serializability check
+// across service bindings.
+export type AttributeValue =
+	| string
+	| number
+	| boolean
+	| null
+	| AttributeValue[]
+	| { [key: string]: AttributeValue | undefined };
+
 export type Attributes = {
 	preferredName?: string;
 	pronouns?: string;
@@ -11,7 +23,7 @@ export type Attributes = {
 	disabledReason?: string;
 	disabledAt?: number;
 	disabledBy?: string;
-	[key: string]: unknown;
+	[key: string]: AttributeValue | undefined;
 };
 
 export type AttributePatch = {
@@ -22,5 +34,5 @@ export type AttributePatch = {
 	disabledReason?: string | null;
 	disabledAt?: number | null;
 	disabledBy?: string | null;
-	[key: string]: unknown;
+	[key: string]: AttributeValue | undefined;
 };
