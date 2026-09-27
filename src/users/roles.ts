@@ -18,8 +18,11 @@ export const RoleRemovePatternSchema = z.union([
 
 export type RolePatch = { add?: string[]; remove?: string[] };
 
-// Documents listRoleGrants()'s shape for OpenAPI; not used to validate anything.
+// The OpenAPI doc schema for listRoleGrants()'s shape — not used to validate
+// anything. listRoleGrants()'s return type is annotated against RoleGrant
+// (below), so the two can never drift without a typecheck failure.
 export const RoleGrantSchema = z.object({ role: z.string(), source: z.string() });
+export type RoleGrant = z.infer<typeof RoleGrantSchema>;
 
 /** A user's effective roles: the distinct union across every source, sorted. */
 export async function listRoles(db: DB, cid: string): Promise<string[]> {
@@ -52,10 +55,7 @@ export async function listRolesOfHolders(db: DB, role: string): Promise<Map<stri
 	return byCid;
 }
 
-export async function listRoleGrants(
-	db: DB,
-	cid: string
-): Promise<{ role: string; source: string }[]> {
+export async function listRoleGrants(db: DB, cid: string): Promise<RoleGrant[]> {
 	return db
 		.select({ role: userRoles.role, source: userRoles.source })
 		.from(userRoles)

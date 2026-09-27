@@ -6,9 +6,9 @@
 import { z } from 'zod';
 import type { User } from '../schema';
 
-export type Claims = ReturnType<typeof toClaims>;
-
-// Documents the toClaims() shape for OpenAPI; not used to validate anything.
+// The OpenAPI doc schema for toClaims()'s shape — not used to validate
+// anything. toClaims()'s return type is annotated against Claims (below), so
+// the two can never drift without a typecheck failure.
 export const ClaimsSchema = z.object({
 	sub: z.string(),
 	name: z.string(),
@@ -27,7 +27,9 @@ export const ClaimsSchema = z.object({
 	active: z.boolean()
 });
 
-export function toClaims(user: User, roles: string[]) {
+export type Claims = z.infer<typeof ClaimsSchema>;
+
+export function toClaims(user: User, roles: string[]): Claims {
 	return {
 		sub: user.cid,
 		name: user.preferredName ?? [user.firstName, user.lastName].filter(Boolean).join(' '),

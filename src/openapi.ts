@@ -3,19 +3,22 @@
 // 400 (hono-openapi's own default body is {success,error,data}; ours is the
 // real body error-handler.ts writes) and every route's documented 401/403/
 // 404/409. Never let the two drift: this is what a client actually receives.
-import type { OpenAPIV3_1 } from 'openapi-types';
-
+//
+// No `openapi-types` import: `type` literals are narrowed with `as const`
+// field-by-field (not on the whole object — that would make `required`
+// readonly and openAPIRouteHandler wants a plain string[]), and
+// openAPIRouteHandler structurally checks the result at the call site.
 const ERROR_SCHEMA_NAME = 'Error';
 
-export const errorSchemas: Record<string, OpenAPIV3_1.SchemaObject> = {
+export const errorSchemas = {
 	[ERROR_SCHEMA_NAME]: {
-		type: 'object',
+		type: 'object' as const,
 		properties: {
 			error: {
-				type: 'object',
+				type: 'object' as const,
 				properties: {
-					code: { type: 'string' },
-					message: { type: 'string' }
+					code: { type: 'string' as const },
+					message: { type: 'string' as const }
 				},
 				required: ['code', 'message']
 			}
