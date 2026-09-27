@@ -9,20 +9,11 @@ import {
 	findSessionByToken,
 	validateSession
 } from '../../src/sessions/domain';
+import { upsertFromVatsim } from '../../src/users/domain';
+import { makeVatsimProfile } from '../helpers/fixtures';
 
-async function seedUser(db: ReturnType<typeof makeDb>, id = 'u1', cid = '1') {
-	await db.insert(users).values({
-		id,
-		cid,
-		email: 'x@y.com',
-		vatsimData: {
-			cid,
-			personal: { name_first: 'X', name_last: 'Y', email: 'x@y.com' }
-		},
-		attributes: {},
-		createdAt: 0,
-		updatedAt: 0
-	});
+async function seedUser(db: ReturnType<typeof makeDb>, cid = 'u1') {
+	await upsertFromVatsim(db, makeVatsimProfile({ cid }));
 }
 
 beforeEach(async () => {
@@ -54,7 +45,7 @@ describe('createSession', () => {
 		expect(expiresAt).toBe(1000 + 30 * 24 * 60 * 60 * 1000);
 		const rows = await db.select().from(sessions).all();
 		expect(rows).toHaveLength(1);
-		expect(rows[0]?.userId).toBe('u1');
+		expect(rows[0]?.cid).toBe('u1');
 		expect(rows[0]?.id).not.toBe(token); // stored as hash, not raw
 		expect(rows[0]?.id).toMatch(/^[0-9a-f]{64}$/);
 	});
@@ -66,7 +57,7 @@ describe('findSessionByToken', () => {
 		await seedUser(db);
 		const { token } = await createSession(db, 'u1');
 		const row = await findSessionByToken(db, token);
-		expect(row?.userId).toBe('u1');
+		expect(row?.cid).toBe('u1');
 	});
 	it('returns null for unknown tokens', async () => {
 		const db = makeDb(env.DB);
@@ -107,7 +98,7 @@ describe('validateSession', () => {
 		const { token } = await createSession(db, 'u1');
 		vi.setSystemTime(new Date(2000));
 		const result = await validateSession(db, token);
-		expect(result?.userId).toBe('u1');
+		expect(result?.cid).toBe('u1');
 		const stored = await db.select().from(sessions).all();
 		expect(stored[0]?.lastSeenAt).toBe(2000);
 	});
@@ -142,7 +133,7 @@ describe('validateSession', () => {
 		const { token } = await createSession(db, 'u1');
 		// Bypass setUserActive (which deletes sessions atomically) to create
 		// the orphan-session-on-disabled-user state validateSession defends against.
-		await db.update(users).set({ isActive: false }).where(eq(users.id, 'u1'));
+		await db.update(users).set({ active: false }).where(eq(users.cid, 'u1'));
 		const result = await validateSession(db, token);
 		expect(result).toBeNull();
 		const rows = await db.select().from(sessions).all();

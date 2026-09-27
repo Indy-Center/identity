@@ -1,1 +1,0 @@
-ALTER TABLE `users` ADD `is_active` integer DEFAULT true NOT NULL;

@@ -88,11 +88,11 @@ describe('GET /login/callback', () => {
 		const allSessions = await db.select().from(sessions).all();
 		expect(allSessions).toHaveLength(1);
 		const token = identityCookie!.split(';')[0]!.slice('__Host-identity_session='.length);
-		expect((await validateSession(db, token))?.userId).toBe(user!.id);
+		expect((await validateSession(db, token))?.cid).toBe(user!.cid);
 
 		const codes = await db.select().from(authorizationCodes).all();
 		expect(codes).toHaveLength(1);
-		expect(codes[0]!.userId).toBe(user!.id);
+		expect(codes[0]!.cid).toBe(user!.cid);
 		expect(codes[0]!.redirectUri).toBe(REDIRECT);
 	});
 
@@ -159,11 +159,11 @@ describe('GET /login/callback', () => {
 	it('rejects a disabled user with access_denied and issues nothing', async () => {
 		// Pre-create the user as disabled — upsertFromVatsim does not re-enable.
 		const db = makeDb(env.DB);
-		const { id } = await upsertFromVatsim(db, {
+		const { cid } = await upsertFromVatsim(db, {
 			cid: '999',
 			personal: { name_first: 'Test', name_last: 'User', email: 'test@example.com' }
 		});
-		await setUserActive(db, id, false, { reason: 'banned' });
+		await setUserActive(db, cid, false, { reason: 'banned' });
 
 		mockVatsim();
 		const res = await callback(`__Host-oauth_state=state_xyz; ${returnCookie(REDIRECT)}`);
@@ -175,9 +175,9 @@ describe('GET /login/callback', () => {
 			res.headers.getSetCookie().find((c) => c.startsWith('__Host-identity_session='))
 		).toBeUndefined();
 
-		// vatsim_data archive is still refreshed (upsert ran before the gate)
+		// VATSIM columns are still refreshed (upsert ran before the gate)
 		const u = await db.select().from(users).where(eq(users.cid, '999')).get();
-		expect(u!.isActive).toBe(false);
+		expect(u!.active).toBe(false);
 
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 		expect(await db.select().from(authorizationCodes).all()).toHaveLength(0);

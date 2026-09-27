@@ -16,7 +16,7 @@ export async function hashSessionToken(token: string): Promise<string> {
 
 export async function createSession(
 	db: DB,
-	userId: string
+	cid: string
 ): Promise<{ token: string; expiresAt: number }> {
 	const now = Date.now();
 	const token = createSessionToken();
@@ -24,7 +24,7 @@ export async function createSession(
 	const expiresAt = now + SESSION_LIFETIME_MS;
 	await db.insert(sessions).values({
 		id,
-		userId,
+		cid,
 		expiresAt,
 		createdAt: now,
 		lastSeenAt: now
@@ -43,26 +43,26 @@ export async function deleteSessionByToken(db: DB, token: string): Promise<void>
 	await db.delete(sessions).where(eq(sessions.id, id));
 }
 
-export async function deleteAllSessionsForUser(db: DB, userId: string): Promise<void> {
-	await db.delete(sessions).where(eq(sessions.userId, userId));
+export async function deleteAllSessionsForUser(db: DB, cid: string): Promise<void> {
+	await db.delete(sessions).where(eq(sessions.cid, cid));
 }
 
 export async function validateSession(db: DB, token: string): Promise<Session | null> {
 	const now = Date.now();
 	const id = await hashSessionToken(token);
 	const row = await db
-		.select({ session: sessions, isActive: users.isActive })
+		.select({ session: sessions, active: users.active })
 		.from(sessions)
-		.innerJoin(users, eq(users.id, sessions.userId))
+		.innerJoin(users, eq(users.cid, sessions.cid))
 		.where(eq(sessions.id, id))
 		.get();
 	if (!row) {
 		return null;
 	}
 	// Defense-in-depth: setUserActive(false) atomically deletes sessions, but
-	// the JOIN + isActive check protects against any path that leaves an
+	// the JOIN + active check protects against any path that leaves an
 	// orphan session row attached to a disabled user.
-	if (row.session.expiresAt < now || !row.isActive) {
+	if (row.session.expiresAt < now || !row.active) {
 		await db.delete(sessions).where(eq(sessions.id, row.session.id));
 		return null;
 	}

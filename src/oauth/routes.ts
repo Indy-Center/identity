@@ -89,7 +89,7 @@ oauthRoutes.get('/authorize', async (c) => {
 	if (existing) {
 		const session = await validateSession(db, existing);
 		if (session) {
-			const { code } = await createAuthorizationCode(db, session.userId, redirectUri);
+			const { code } = await createAuthorizationCode(db, session.cid, redirectUri, clientId);
 			clearLegacySessionCookie(c);
 			return c.redirect(buildRedirectWithCode(redirectUri, code, state), 302);
 		}
@@ -141,16 +141,16 @@ oauthRoutes.post('/token', async (c) => {
 			'grant_type, code, redirect_uri and client_id are required'
 		);
 	}
-	const { grant_type, code, redirect_uri } = parsed.data;
+	const { grant_type, code, redirect_uri, client_id } = parsed.data;
 	if (grant_type !== 'authorization_code') {
 		return oauthError(c, 'unsupported_grant_type', 'only authorization_code is supported');
 	}
-	const minted = await exchangeAuthorizationCode(makeDb(c.env.DB), code, redirect_uri);
+	const minted = await exchangeAuthorizationCode(makeDb(c.env.DB), code, redirect_uri, client_id);
 	if (!minted) {
 		return oauthError(
 			c,
 			'invalid_grant',
-			'authorization code is invalid, expired, or was issued for a different redirect_uri'
+			'authorization code is invalid, expired, or was issued for a different redirect_uri or client_id'
 		);
 	}
 	c.header('Cache-Control', 'no-store');

@@ -25,8 +25,8 @@ afterEach(() => {
 
 async function seedCode(redirectUri = REDIRECT): Promise<{ userId: string; code: string }> {
 	const db = makeDb(env.DB);
-	const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
-	const { code } = await createAuthorizationCode(db, userId, redirectUri);
+	const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
+	const { code } = await createAuthorizationCode(db, userId, redirectUri, 'charts');
 	return { userId, code };
 }
 
@@ -75,9 +75,9 @@ describe('POST /oauth/token', () => {
 		expect(body.expires_in).toBeLessThanOrEqual(30 * 24 * 60 * 60);
 
 		const db = makeDb(env.DB);
-		expect((await validateSession(db, body.access_token))?.userId).toBe(userId);
+		expect((await validateSession(db, body.access_token))?.cid).toBe(userId);
 
-		const [row] = await db.select().from(sessions).where(eq(sessions.userId, userId));
+		const [row] = await db.select().from(sessions).where(eq(sessions.cid, userId));
 		const expectedExpiresIn = (row!.expiresAt - Date.now()) / 1000;
 		expect(Math.abs(body.expires_in - expectedExpiresIn)).toBeLessThan(2);
 	});
@@ -95,11 +95,12 @@ describe('POST /oauth/token', () => {
 
 	it('rejects an expired code with invalid_grant and prunes it', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
 		const now = Date.now();
 		await db.insert(authorizationCodes).values({
 			id: await sha256Hex('expiredcode'),
-			userId,
+			cid: userId,
+			clientId: 'charts',
 			redirectUri: REDIRECT,
 			expiresAt: now - 1000,
 			createdAt: now - 61_000
@@ -153,7 +154,7 @@ describe('POST /oauth/token', () => {
 		expect(res.status).toBe(200);
 		const db = makeDb(env.DB);
 		const body = (await res.json()) as { access_token: string };
-		expect((await validateSession(db, body.access_token))?.userId).toBe(userId);
+		expect((await validateSession(db, body.access_token))?.cid).toBe(userId);
 	});
 
 	it('rejects a JSON body with invalid_request', async () => {

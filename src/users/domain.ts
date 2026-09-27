@@ -1,170 +1,119 @@
-import { eq, sql } from 'drizzle-orm';
-import { sessions, users, userRoles, type User } from '../schema';
+// src/users/domain.ts
+import { and, eq } from 'drizzle-orm';
+import { sessions, userRoles, users, type User } from '../schema';
 import type { DB } from '../db';
-import type { AttributePatch } from './attributes';
-import { AttributePatchSchema } from './attributes-schema';
-import { IdentityError } from '../errors';
 import type { VatsimProfile } from '../oauth/vatsim';
+import { IdentityError } from '../errors';
 
+// Writes only the VATSIM-owned columns; identity-owned columns keep their values.
 export async function upsertFromVatsim(db: DB, profile: VatsimProfile): Promise<User> {
 	const now = Date.now();
-	const id = crypto.randomUUID();
-
+	const vatsim = {
+		firstName: profile.personal.name_first ?? null,
+		lastName: profile.personal.name_last ?? null,
+		email: profile.personal.email,
+		rating: profile.vatsim?.rating?.short ?? null,
+		pilotRating: profile.vatsim?.pilotrating?.short ?? null,
+		division: profile.vatsim?.division?.id ?? null,
+		region: profile.vatsim?.region?.id ?? null,
+		subdivision: profile.vatsim?.subdivision?.id ?? null,
+		vatsimProfile: profile,
+		vatsimSyncedAt: now
+	};
 	const [row] = await db
 		.insert(users)
-		.values({
-			id,
-			cid: profile.cid,
-			email: profile.personal.email,
-			vatsimData: profile,
-			attributes: {},
-			isActive: true,
-			createdAt: now,
-			updatedAt: now
-		})
-		.onConflictDoUpdate({
-			target: users.cid,
-			set: {
-				email: profile.personal.email,
-				vatsimData: profile,
-				updatedAt: now
-			}
-		})
+		.values({ cid: profile.cid, ...vatsim, createdAt: now, updatedAt: now })
+		.onConflictDoUpdate({ target: users.cid, set: { ...vatsim, updatedAt: now } })
 		.returning();
-
 	return row!;
+}
+
+export async function getUser(db: DB, cid: string): Promise<User | null> {
+	return (await db.select().from(users).where(eq(users.cid, cid)).get()) ?? null;
+}
+
+export type UserFilter = { role: string } | { discordId: string };
+
+export async function listUsers(db: DB, filter: UserFilter): Promise<User[]> {
+	if ('discordId' in filter) {
+		return db.select().from(users).where(eq(users.discordId, filter.discordId)).all();
+	}
+	const rows = await db
+		.selectDistinct({ user: users })
+		.from(users)
+		.innerJoin(userRoles, eq(userRoles.cid, users.cid))
+		.where(eq(userRoles.role, filter.role))
+		.all();
+	return rows.map((r) => r.user);
+}
+
+// Identity-owned profile fields. `null` clears a field; `undefined` leaves it.
+export type ProfilePatch = {
+	preferredName?: string | null;
+	pronouns?: string | null;
+	operatingInitials?: string | null;
+	discordId?: string | null;
+};
+
+function isUniqueViolation(err: unknown): boolean {
+	for (let e: unknown = err; e; e = (e as { cause?: unknown }).cause) {
+		if (e instanceof Error && e.message.includes('UNIQUE constraint failed')) {
+			return true;
+		}
+	}
+	return false;
+}
+
+export async function updateProfile(db: DB, cid: string, patch: ProfilePatch): Promise<User> {
+	const set = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+	if (Object.keys(set).length === 0) {
+		const user = await getUser(db, cid);
+		if (!user) {
+			throw new IdentityError('not_found', 404, `user ${cid} not found`);
+		}
+		return user;
+	}
+	try {
+		const [row] = await db
+			.update(users)
+			.set({ ...set, updatedAt: Date.now() })
+			.where(eq(users.cid, cid))
+			.returning();
+		if (!row) {
+			throw new IdentityError('not_found', 404, `user ${cid} not found`);
+		}
+		return row;
+	} catch (err) {
+		if (isUniqueViolation(err)) {
+			throw new IdentityError('conflict', 409, 'discord_id or operating_initials already in use');
+		}
+		throw err;
+	}
 }
 
 export async function setUserActive(
 	db: DB,
-	userId: string,
+	cid: string,
 	active: boolean,
-	opts: { reason?: string; changedBy?: string } = {}
+	opts: { reason?: string } = {}
 ): Promise<User> {
 	const now = Date.now();
-
-	// Build the attributes patch:
-	//   - enabling clears disabled* keys (null = delete)
-	//   - disabling writes them
-	const patchObj: Record<string, unknown> = {};
-	if (active) {
-		patchObj.disabledReason = null;
-		patchObj.disabledAt = null;
-		patchObj.disabledBy = null;
-	} else {
-		patchObj.disabledAt = now;
-		if (opts.reason !== undefined) {
-			patchObj.disabledReason = opts.reason;
-		}
-		if (opts.changedBy !== undefined) {
-			patchObj.disabledBy = opts.changedBy;
-		}
-	}
-	const patchJson = JSON.stringify(patchObj);
-
-	const updateStmt = db
+	const update = db
 		.update(users)
-		.set({
-			isActive: active,
-			attributes: sql`json_patch(${users.attributes}, ${patchJson})`,
-			updatedAt: now
-		})
-		.where(eq(users.id, userId))
+		.set(
+			active
+				? { active, disabledReason: null, disabledAt: null, updatedAt: now }
+				: { active, disabledReason: opts.reason ?? null, disabledAt: now, updatedAt: now }
+		)
+		.where(eq(users.cid, cid))
 		.returning();
-
-	let row: User | undefined;
-	if (active) {
-		[row] = await updateStmt;
-	} else {
-		// Disabling must invalidate every existing session in the same
-		// transaction, for immediate revocation — a disabled user's cookies
-		// should stop working right away, not whenever their session expires.
-		// validateSession also joins on users.isActive as defense in depth,
-		// but that shouldn't be the only thing standing between a banned user
-		// and a live session.
-		const deleteSessionsStmt = db.delete(sessions).where(eq(sessions.userId, userId));
-		const [updated] = await db.batch([updateStmt, deleteSessionsStmt]);
-		[row] = updated;
-	}
-
+	// Disabling revokes every session in the same transaction.
+	const [rows] = active
+		? [await update]
+		: await db.batch([update, db.delete(sessions).where(eq(sessions.cid, cid))]);
+	const row = rows[0];
 	if (!row) {
-		throw new IdentityError('not_found', 404, `user ${userId} not found`);
-	}
-
-	return row;
-}
-
-export async function setAttributes(db: DB, userId: string, patch: AttributePatch): Promise<User> {
-	const validated = AttributePatchSchema.parse(patch);
-
-	// Strip undefined keys — they should not appear in the patch JSON.
-	// JSON.stringify drops them automatically, but being explicit keeps
-	// intent obvious for the next reader.
-	const patchObj: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(validated)) {
-		if (value !== undefined) {
-			patchObj[key] = value;
-		}
-	}
-	const patchJson = JSON.stringify(patchObj);
-
-	const [row] = await db
-		.update(users)
-		.set({
-			attributes: sql`json_patch(${users.attributes}, ${patchJson})`,
-			updatedAt: Date.now()
-		})
-		.where(eq(users.id, userId))
-		.returning();
-
-	if (!row) {
-		throw new IdentityError('not_found', 404, `user ${userId} not found`);
+		throw new IdentityError('not_found', 404, `user ${cid} not found`);
 	}
 	return row;
-}
-
-export async function getById(db: DB, id: string): Promise<User | null> {
-	const row = await db.select().from(users).where(eq(users.id, id)).get();
-	return row ?? null;
-}
-
-export async function getByCid(db: DB, cid: string): Promise<User | null> {
-	const row = await db.select().from(users).where(eq(users.cid, cid)).get();
-	return row ?? null;
-}
-
-export async function getByEmail(db: DB, email: string): Promise<User[]> {
-	return db.select().from(users).where(eq(users.email, email)).all();
-}
-
-export async function listAll(db: DB): Promise<User[]> {
-	return db.select().from(users).all();
-}
-
-export async function listByRole(db: DB, role: string): Promise<User[]> {
-	const rows = await db
-		.select()
-		.from(users)
-		.innerJoin(userRoles, eq(userRoles.userId, users.id))
-		.where(eq(userRoles.role, role))
-		.all();
-	return rows.map((r) => r.users);
-}
-
-export async function listOperatingInitials(db: DB): Promise<string[]> {
-	// Query the JSON 'attributes' column for operatingInitials values.
-	// SQLite json_extract is supported by D1.
-	const rows = await db
-		.select({
-			oi: sql<string>`json_extract(${users.attributes}, '$.operatingInitials')`
-		})
-		.from(users)
-		.all();
-	const set = new Set<string>();
-	for (const r of rows) {
-		if (typeof r.oi === 'string' && r.oi.length > 0) {
-			set.add(r.oi);
-		}
-	}
-	return [...set];
 }

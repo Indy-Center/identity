@@ -111,7 +111,7 @@ describe('GET /oauth/authorize — no identity session', () => {
 describe('GET /oauth/authorize — with an identity session (SSO)', () => {
 	it('redirects straight back with a code and the echoed state', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
 		const { token } = await createSession(db, userId);
 
 		const res = await exports.default.fetch(authorizeUrl({ ...VALID, state: 'xyz' }), {
@@ -131,13 +131,13 @@ describe('GET /oauth/authorize — with an identity session (SSO)', () => {
 
 		const codes = await db.select().from(authorizationCodes).all();
 		expect(codes).toHaveLength(1);
-		expect(codes[0]!.userId).toBe(userId);
+		expect(codes[0]!.cid).toBe(userId);
 		expect(codes[0]!.redirectUri).toBe(REDIRECT);
 	});
 
 	it('clears the legacy fic_session cookie', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '5' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '5' }));
 		const { token } = await createSession(db, userId);
 
 		const res = await exports.default.fetch(authorizeUrl(VALID), {
@@ -153,7 +153,7 @@ describe('GET /oauth/authorize — with an identity session (SSO)', () => {
 
 	it('400s and mints no code when the redirect_uri is disallowed, even with a valid session', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '6' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '6' }));
 		const { token } = await createSession(db, userId);
 
 		const res = await exports.default.fetch(
@@ -170,7 +170,7 @@ describe('GET /oauth/authorize — with an identity session (SSO)', () => {
 
 	it('falls through to VATSIM instead of minting a code for a disabled user', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '7' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '7' }));
 		const { token } = await createSession(db, userId);
 		await setUserActive(db, userId, false, { reason: 'test' });
 
@@ -186,7 +186,7 @@ describe('GET /oauth/authorize — with an identity session (SSO)', () => {
 
 	it('omits state when the client sent none', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
 		const { token } = await createSession(db, userId);
 
 		const res = await exports.default.fetch(authorizeUrl(VALID), {

@@ -21,8 +21,8 @@ beforeEach(async () => {
 describe('GET /logout', () => {
 	it("ends every session of the user named by identity's cookie and redirects", async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
-		const { id: otherId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
+		const { cid: otherId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
 		const identitySession = await createSession(db, userId);
 		await createSession(db, userId); // an app's session for the same user
 		await createSession(db, otherId); // someone else's, must survive
@@ -45,7 +45,7 @@ describe('GET /logout', () => {
 
 		const remaining = await db.select().from(sessions).all();
 		expect(remaining).toHaveLength(1);
-		expect(remaining[0]!.userId).toBe(otherId);
+		expect(remaining[0]!.cid).toBe(otherId);
 	});
 
 	it('still clears cookies and redirects when no cookie is present', async () => {

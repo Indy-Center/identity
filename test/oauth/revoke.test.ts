@@ -36,7 +36,7 @@ function revoke(token: string): Promise<Response> {
 describe('POST /oauth/revoke', () => {
 	it('invalidates the token; userinfo is then 401', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
 		const { token } = await createSession(db, userId);
 
 		const res = await revoke(token);
@@ -77,7 +77,7 @@ describe('POST /oauth/revoke', () => {
 
 	it('revokes only the targeted session, leaving the other valid', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
 		const { token: tokenA } = await createSession(db, userId);
 		const { token: tokenB } = await createSession(db, userId);
 
@@ -85,6 +85,6 @@ describe('POST /oauth/revoke', () => {
 		expect(res.status).toBe(200);
 
 		expect(await validateSession(db, tokenA)).toBeNull();
-		expect((await validateSession(db, tokenB))?.userId).toBe(userId);
+		expect((await validateSession(db, tokenB))?.cid).toBe(userId);
 	});
 });

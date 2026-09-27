@@ -4,22 +4,19 @@ import { makeDb } from '../src/db';
 import { users } from '../src/schema';
 
 describe('users table', () => {
-	it('insert and select round-trips', async () => {
+	it('is keyed by cid', async () => {
 		const db = makeDb(env.DB);
+		await db.delete(users);
 		await db.insert(users).values({
-			id: 'u1',
 			cid: '1234567',
 			email: 'a@b.com',
-			vatsimData: {
-				cid: '1234567',
-				personal: { name_first: 'A', name_last: 'B', email: 'a@b.com' }
-			},
-			attributes: {},
+			vatsimProfile: { cid: '1234567', personal: { email: 'a@b.com' } },
+			vatsimSyncedAt: 1000,
 			createdAt: 1000,
 			updatedAt: 1000
 		});
 		const got = await db.select().from(users).all();
 		expect(got).toHaveLength(1);
-		expect(got[0]?.cid).toBe('1234567');
+		expect(got[0]).toMatchObject({ cid: '1234567', active: true, preferredName: null });
 	});
 });

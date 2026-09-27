@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { IdentityError } from '../errors';
 
 // Shape of the VATSIM /api/user OAuth payload — the chunk we store as
-// vatsim_data and expose to consumers. Full reference:
+// users.vatsim_profile. Full reference:
 // https://vatsim.dev/api/connect-api/get-user
 
 const RatingSchema = z.looseObject({

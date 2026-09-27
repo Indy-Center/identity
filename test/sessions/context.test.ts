@@ -53,7 +53,7 @@ function mockBothFeeds(
 describe('logout', () => {
 	it('deletes the session row', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
 		const { token } = await createSession(db, userId);
 		await logout(env, token);
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
@@ -72,7 +72,7 @@ describe('getSessionContext', () => {
 
 	it('returns null after the session is invalidated', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '5' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '5' }));
 		const { token } = await createSession(db, userId);
 		mockBothFeeds([], []);
 		await logout(env, token);
@@ -81,9 +81,11 @@ describe('getSessionContext', () => {
 
 	it('returns the joined context with activeSession: null when user is offline', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '7' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '7' }));
 		const { token } = await createSession(db, userId);
-		await db.insert(userRoles).values({ userId, role: 'zid:admin', grantedAt: Date.now() });
+		await db
+			.insert(userRoles)
+			.values({ cid: userId, role: 'zid:admin', source: 'test', grantedAt: Date.now() });
 		mockBothFeeds([], []);
 
 		const ctx = await getSessionContext(env, token);
@@ -96,7 +98,7 @@ describe('getSessionContext', () => {
 
 	it('returns activeSession when the user is currently controlling', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '42' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '42' }));
 		const { token } = await createSession(db, userId);
 
 		const controller: OnlineController = {
@@ -128,7 +130,7 @@ describe('getSessionContext', () => {
 
 	it('returns activeFlightPlan when the pilot has filed a plan', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '777' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '777' }));
 		const { token } = await createSession(db, userId);
 
 		const fp: FlightPlan = {
@@ -150,7 +152,7 @@ describe('getSessionContext', () => {
 
 	it('returns activeFlightPlan: null for a logged-in user not piloting', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '888' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '888' }));
 		const { token } = await createSession(db, userId);
 		mockBothFeeds([], []);
 		const ctx = await getSessionContext(env, token);
@@ -160,7 +162,7 @@ describe('getSessionContext', () => {
 
 	it('returns activeFlightPlan: null when the pilot is connected without a filed plan', async () => {
 		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '999' }));
+		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '999' }));
 		const { token } = await createSession(db, userId);
 		mockBothFeeds([], [{ cid: 999, flight_plan: null }]);
 		const ctx = await getSessionContext(env, token);

@@ -77,17 +77,22 @@ loginRoutes.get('/callback', async (c) => {
 	const profile = await fetchVatsimProfile(c.env.CONNECT_BASE_URL, accessToken);
 	const db = makeDb(c.env.DB);
 	const user = await upsertFromVatsim(db, profile);
-	if (!user.isActive) {
+	if (!user.active) {
 		throw new IdentityError('access_denied', 403, 'account disabled');
 	}
 
 	// Mint the code before writing any cookies: if D1 fails here, the browser
 	// is left with no half-applied session or state cookies.
-	const { redirectUri, state } = authorizeRequest;
-	const { code: authorizationCode } = await createAuthorizationCode(db, user.id, redirectUri);
+	const { redirectUri, clientId, state } = authorizeRequest;
+	const { code: authorizationCode } = await createAuthorizationCode(
+		db,
+		user.cid,
+		redirectUri,
+		clientId
+	);
 
 	// identity's own session: lets /oauth/authorize skip VATSIM next time.
-	const { token } = await createSession(db, user.id);
+	const { token } = await createSession(db, user.cid);
 	setCookie(c, 'identity_session', token, {
 		prefix: 'host',
 		httpOnly: true,
@@ -113,7 +118,7 @@ logoutRoutes.get('/', async (c) => {
 		const db = makeDb(c.env.DB);
 		const session = await findSessionByToken(db, token);
 		if (session) {
-			await deleteAllSessionsForUser(db, session.userId);
+			await deleteAllSessionsForUser(db, session.cid);
 		}
 	}
 

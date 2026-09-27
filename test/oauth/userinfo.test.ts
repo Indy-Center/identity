@@ -29,14 +29,16 @@ afterEach(() => {
 
 async function seed(): Promise<{ userId: string; token: string }> {
 	const db = makeDb(env.DB);
-	const { id: userId } = await upsertFromVatsim(
+	const { cid: userId } = await upsertFromVatsim(
 		db,
 		makeVatsimProfile({
 			cid: '7',
 			personal: { name_first: 'Pat', name_last: 'Quinn', email: 'pat@example.com' }
 		})
 	);
-	await db.insert(userRoles).values({ userId, role: 'zid:admin', grantedAt: Date.now() });
+	await db
+		.insert(userRoles)
+		.values({ cid: userId, role: 'zid:admin', source: 'test', grantedAt: Date.now() });
 	const { token } = await createSession(db, userId);
 	return { userId, token };
 }
@@ -49,7 +51,7 @@ async function expectInvalidToken(res: Response) {
 
 describe('GET /oauth/userinfo', () => {
 	it('returns standard claims plus the session context, dates as ISO strings', async () => {
-		const { userId, token } = await seed();
+		const { token } = await seed();
 		const res = await exports.default.fetch(USERINFO, {
 			headers: { Authorization: `Bearer ${token}` }
 		});
@@ -59,13 +61,13 @@ describe('GET /oauth/userinfo', () => {
 			sub: string;
 			email: string;
 			name: string;
-			user: { id: string; cid: string };
+			user: { cid: string };
 			roles: string[];
 			sessionExpiresAt: string;
 			activeSession: null;
 			activeFlightPlan: null;
 		};
-		expect(body.sub).toBe(userId);
+		expect(body.sub).toBe('7');
 		expect(body.email).toBe('pat@example.com');
 		expect(body.name).toBe('Pat Quinn');
 		expect(body.user.cid).toBe('7');
@@ -74,22 +76,6 @@ describe('GET /oauth/userinfo', () => {
 		expect(new Date(body.sessionExpiresAt).getTime()).toBeGreaterThan(Date.now());
 		expect(body.activeSession).toBeNull();
 		expect(body.activeFlightPlan).toBeNull();
-	});
-
-	it('prefers name_full when VATSIM supplies it', async () => {
-		const db = makeDb(env.DB);
-		const { id: userId } = await upsertFromVatsim(
-			db,
-			makeVatsimProfile({
-				cid: '8',
-				personal: { name_full: 'Dr. Pat Quinn', name_first: 'Pat', email: 'p@example.com' }
-			})
-		);
-		const { token } = await createSession(db, userId);
-		const res = await exports.default.fetch(USERINFO, {
-			headers: { Authorization: `Bearer ${token}` }
-		});
-		expect(((await res.json()) as { name: string }).name).toBe('Dr. Pat Quinn');
 	});
 
 	it('401s with invalid_token for a missing token', async () => {

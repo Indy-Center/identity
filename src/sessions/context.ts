@@ -20,11 +20,10 @@ export type SessionContext = {
 };
 
 export function serializeUserinfo(ctx: SessionContext) {
-	const { name_full, name_first, name_last } = ctx.user.vatsimData.personal;
 	return {
-		sub: ctx.user.id,
+		sub: ctx.user.cid,
 		email: ctx.user.email,
-		name: name_full || [name_first, name_last].filter(Boolean).join(' '),
+		name: [ctx.user.firstName, ctx.user.lastName].filter(Boolean).join(' '),
 		...ctx,
 		sessionExpiresAt: ctx.sessionExpiresAt.toISOString()
 	};
@@ -39,12 +38,12 @@ export async function getSessionContext(
 	if (!session) {
 		return null;
 	}
-	const user = await users.getById(db, session.userId);
+	const user = await users.getUser(db, session.cid);
 	if (!user) {
 		return null;
 	}
 	const [roleRows, activeSession, activeFlightPlan] = await Promise.all([
-		roles.get(db, user.id),
+		roles.listRoles(db, user.cid),
 		onlineControllers.getActiveSession(user.cid),
 		flightPlans.getFlightPlan(user.cid)
 	]);
