@@ -1,4 +1,4 @@
-// presence/schema.ts
+// src/incubator/presence/schema.ts
 import { z } from 'zod';
 
 // vNAS controllers feed shape. Mirrors the publicly observable response at

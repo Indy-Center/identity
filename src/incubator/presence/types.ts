@@ -1,4 +1,4 @@
-// presence/types.ts
+// src/incubator/presence/types.ts
 import type { z } from 'zod';
 import type {
 	OnlineControllerSchema,

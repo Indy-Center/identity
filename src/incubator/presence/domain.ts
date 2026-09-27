@@ -1,4 +1,4 @@
-// presence/domain.ts
+// src/incubator/presence/domain.ts
 import { VnasControllerResponseSchema } from './schema';
 import type { OnlineController } from './types';
 
@@ -14,23 +14,23 @@ async function fetchAndParse(): Promise<Map<string, OnlineController> | null> {
 	try {
 		const res = await fetch(FEED_URL);
 		if (!res.ok) {
-			console.error(`[online-controllers] feed returned status ${res.status}`);
+			console.error(`[presence] feed returned status ${res.status}`);
 			return null;
 		}
 		const json = await res.json();
 		const parsed = VnasControllerResponseSchema.safeParse(json);
 		if (!parsed.success) {
-			console.error('[online-controllers] feed failed schema validation', parsed.error.issues);
+			console.error('[presence] feed failed schema validation', parsed.error.issues);
 			return null;
 		}
 		const byCid = new Map<string, OnlineController>();
 		for (const c of parsed.data.controllers) {
 			byCid.set(c.vatsimData.cid, c);
 		}
-		console.log(`[online-controllers] refreshed ${byCid.size} entries`);
+		console.log(`[presence] refreshed ${byCid.size} entries`);
 		return byCid;
 	} catch (err) {
-		console.error('[online-controllers] feed fetch failed', err);
+		console.error('[presence] feed fetch failed', err);
 		return null;
 	}
 }
