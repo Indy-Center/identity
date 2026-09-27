@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { VatsimProfile } from '../../src/client/vatsim';
+import type { VatsimProfile } from '../../src/auth/vatsim-schema';
 import { VatsimProfileSchema } from '../../src/auth/vatsim-schema';
 
 describe('VatsimProfileSchema', () => {

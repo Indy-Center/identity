@@ -1,5 +1,5 @@
 // src/oauth/redirect-uri.ts
-import { IdentityError } from '../client/errors';
+import { IdentityError } from '../errors';
 
 // Where identity may send a browser: https on flyindycenter.com or one level
 // of subdomain, or http on a loopback host (RFC 8252 §7.3) at any port. Both

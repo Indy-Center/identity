@@ -1,39 +1,23 @@
 {
-  "name": "@indy-center/identity",
-  "version": "1.1.0",
+  "name": "id",
+  "private": true,
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Indy-Center/identity.git"
   },
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": ["dist"],
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "pretypecheck": "npm run build:lib",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write --no-error-on-unmatched-pattern \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
+    "format:check": "prettier --check --no-error-on-unmatched-pattern \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
     "cf-typegen": "wrangler types",
-    "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json",
-    "check:dist": "node scripts/check-dist.mjs",
-    "check:consumer": "tsc -p tsconfig.consumer.json",
-    "prepublishOnly": "npm run build:lib",
-    "pretest": "npm run build:lib",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate:local": "wrangler d1 migrations apply identity_db --local"
+    "db:migrate:local": "wrangler d1 migrations apply id_db --local"
   },
   "dependencies": {
     "zod": "^4.4.2"

@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
-import type { Attributes } from './client/attributes';
-import type { VatsimProfile } from './client/vatsim';
+import type { Attributes } from './users/attributes';
+import type { VatsimProfile } from './auth/vatsim-schema';
 
 export const users = sqliteTable(
 	'users',
@@ -62,3 +62,5 @@ export const authorizationCodes = sqliteTable(
 	},
 	(t) => [index('idx_authorization_codes_expires').on(t.expiresAt)]
 );
+
+export type User = typeof users.$inferSelect;

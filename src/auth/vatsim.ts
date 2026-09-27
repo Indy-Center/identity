@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import type { VatsimProfile } from '../client/vatsim';
-import { VatsimProfileSchema } from './vatsim-schema';
-import { IdentityError } from '../client/errors';
+import { VatsimProfileSchema, type VatsimProfile } from './vatsim-schema';
+import { IdentityError } from '../errors';
 
 const VatsimResponseSchema = z.object({ data: VatsimProfileSchema });
 

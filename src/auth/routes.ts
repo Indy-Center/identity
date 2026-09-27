@@ -6,7 +6,7 @@ import { exchangeCodeForToken } from './oauth';
 import { createSession, deleteAllSessionsForUser, findSessionByToken } from '../sessions/domain';
 import { upsertFromVatsim } from '../users/domain';
 import { fetchVatsimProfile } from './vatsim';
-import { IdentityError } from '../client/errors';
+import { IdentityError } from '../errors';
 import { createAuthorizationCode } from '../authorization-codes/domain';
 import {
 	buildRedirectWithCode,

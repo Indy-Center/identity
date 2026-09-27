@@ -25,7 +25,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_KEY }}
-          command: d1 migrations apply identity_db --remote
+          command: d1 migrations apply id_db --remote
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3

@@ -1,4 +1,4 @@
-import type { VatsimProfile } from '../../src/client/vatsim';
+import type { VatsimProfile } from '../../src/auth/vatsim-schema';
 
 export function makeVatsimProfile(overrides: Partial<VatsimProfile> = {}): VatsimProfile {
 	return {

@@ -14,8 +14,8 @@ import {
 	listOperatingInitials
 } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
-import { IdentityError } from '../../src/client/errors';
-import type { VatsimProfile } from '../../src/client/vatsim';
+import { IdentityError } from '../../src/errors';
+import type { VatsimProfile } from '../../src/auth/vatsim-schema';
 
 beforeEach(async () => {
 	const db = makeDb(env.DB);

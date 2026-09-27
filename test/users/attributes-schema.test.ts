@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Attributes, AttributePatch } from '../../src/client/attributes';
+import type { Attributes, AttributePatch } from '../../src/users/attributes';
 import { AttributesSchema, AttributePatchSchema } from '../../src/users/attributes-schema';
 
 describe('AttributesSchema', () => {

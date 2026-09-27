@@ -79,7 +79,7 @@ describe('GET /oauth/authorize — no identity session', () => {
 		expect(location.origin + location.pathname).toBe('https://auth.vatsim.net/oauth/authorize');
 		expect(location.searchParams.get('client_id')).toBe('test_client_id');
 		expect(location.searchParams.get('redirect_uri')).toBe(
-			'https://auth.flyindycenter.com/login/callback'
+			'https://id.flyindycenter.com/login/callback'
 		);
 		const vatsimState = location.searchParams.get('state');
 		expect(vatsimState).toBeTruthy();

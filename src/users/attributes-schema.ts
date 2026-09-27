@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AttributeValue } from '../client/attributes';
+import type { AttributeValue } from './attributes';
 
 export const OperatingInitialsSchema = z.string().regex(/^[A-Z]{2}$/);
 

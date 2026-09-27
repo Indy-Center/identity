@@ -1,4 +1,4 @@
-// src/client/attributes.ts
+// src/users/attributes.ts
 // Public type surface. Validation schemas live in src/users/attributes-schema.ts.
 
 export type OperatingInitials = string; // /^[A-Z]{2}$/

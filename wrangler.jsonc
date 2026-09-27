@@ -1,23 +1,23 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "identity",
+  "name": "id",
   "main": "src/index.ts",
   "account_id": "afd63515948c9b2188ce14ef1504b2c1",
   "compatibility_date": "2026-04-29",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "CONNECT_BASE_URL": "https://auth.vatsim.net",
-    "CONNECT_CALLBACK_URL": "https://auth.flyindycenter.com/login/callback"
+    "CONNECT_CALLBACK_URL": "https://id.flyindycenter.com/login/callback"
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "identity_db",
-      "database_id": "32494e76-880a-4577-9d32-b24f1f8b9623",
+      "database_name": "id_db",
+      "database_id": "7eb0a282-35ed-4731-ba26-43b8465e9201",
       "migrations_dir": "src/migrations"
     }
   ],
   "routes": [
-    { "pattern": "auth.flyindycenter.com", "custom_domain": true }
+    { "pattern": "id.flyindycenter.com", "custom_domain": true }
   ]
 }

@@ -6,12 +6,12 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { makeDb } from '../db';
 import { randomBase32 } from '../crypto';
-import { IdentityError } from '../client/errors';
+import { IdentityError } from '../errors';
 import { buildAuthorizationUrl } from '../auth/oauth';
 import { validateSession } from '../sessions/domain';
 import { createAuthorizationCode, exchangeAuthorizationCode } from '../authorization-codes/domain';
 import { getSessionContext, logout } from '../sessions/context';
-import { serializeUserinfo } from '../client/wire';
+import { serializeUserinfo } from '../sessions/context';
 import { buildRedirectWithCode, isAllowedOrigin, isAllowedRedirectUri } from './redirect-uri';
 import { clearLegacySessionCookie } from '../auth/legacy-cookie';
 

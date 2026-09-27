@@ -39,3 +39,5 @@ export const VatsimProfileSchema = z.looseObject({
 		})
 		.optional()
 });
+
+export type VatsimProfile = z.infer<typeof VatsimProfileSchema>;

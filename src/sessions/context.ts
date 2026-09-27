@@ -7,7 +7,28 @@ import * as sessions from './domain';
 import * as roles from '../roles/domain';
 import * as onlineControllers from '../online-controllers/domain';
 import * as flightPlans from '../flight-plans/domain';
-import type { SessionContext } from '../client/session-context';
+import type { User } from '../schema';
+import type { OnlineController } from '../online-controllers/types';
+import type { FlightPlan } from '../flight-plans/types';
+
+export type SessionContext = {
+	user: User;
+	roles: string[];
+	sessionExpiresAt: Date;
+	activeSession: OnlineController | null;
+	activeFlightPlan: FlightPlan | null;
+};
+
+export function serializeUserinfo(ctx: SessionContext) {
+	const { name_full, name_first, name_last } = ctx.user.vatsimData.personal;
+	return {
+		sub: ctx.user.id,
+		email: ctx.user.email,
+		name: name_full || [name_first, name_last].filter(Boolean).join(' '),
+		...ctx,
+		sessionExpiresAt: ctx.sessionExpiresAt.toISOString()
+	};
+}
 
 export async function getSessionContext(
 	env: Cloudflare.Env,

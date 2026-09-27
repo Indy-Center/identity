@@ -5,7 +5,7 @@ import {
 	isAllowedRedirectUri,
 	validateReturnUrl
 } from '../../src/oauth/redirect-uri';
-import { IdentityError } from '../../src/client/errors';
+import { IdentityError } from '../../src/errors';
 
 describe('isAllowedRedirectUri', () => {
 	it('accepts https flyindycenter.com subdomains and the apex', () => {
