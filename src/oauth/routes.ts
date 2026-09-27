@@ -8,9 +8,13 @@ import { makeDb } from '../db';
 import { randomBase32 } from '../crypto';
 import { IdentityError } from '../errors';
 import { buildAuthorizationUrl } from './vatsim';
-import { validateSession } from '../sessions/domain';
+import { deleteSessionByToken, validateSession } from '../sessions/domain';
+import { getUser } from '../users/domain';
+import { listRoles } from '../users/roles';
+import { toClaims } from '../users/claims';
+import { getActiveSession } from '../incubator/presence/domain';
+import { getFlightPlan } from '../incubator/flight-plans/domain';
 import { createAuthorizationCode, exchangeAuthorizationCode } from './codes';
-import { getSessionContext, logout, serializeUserinfo } from '../sessions/context';
 import { buildRedirectWithCode, isAllowedOrigin, isAllowedRedirectUri } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
 
@@ -164,13 +168,25 @@ oauthRoutes.post('/token', async (c) => {
 
 oauthRoutes.get('/userinfo', async (c) => {
 	const token = bearerToken(c);
-	const ctx = token ? await getSessionContext(c.env, token) : null;
-	if (!ctx) {
+	const db = makeDb(c.env.DB);
+	const session = token ? await validateSession(db, token) : null;
+	const user = session ? await getUser(db, session.cid) : null;
+	if (!user) {
 		c.header('WWW-Authenticate', 'Bearer error="invalid_token"');
 		return c.json({ error: 'invalid_token' }, 401);
 	}
+	const [roles, activeSession, activeFlightPlan] = await Promise.all([
+		listRoles(db, user.cid),
+		getActiveSession(user.cid),
+		getFlightPlan(user.cid)
+	]);
 	c.header('Cache-Control', 'no-store');
-	return c.json(serializeUserinfo(ctx));
+	return c.json({
+		...toClaims(user, roles),
+		email: user.email,
+		active_session: activeSession,
+		active_flight_plan: activeFlightPlan
+	});
 });
 
 const RevokeRequestSchema = z.object({ token: z.string().max(2048).optional() });
@@ -186,7 +202,7 @@ oauthRoutes.post('/revoke', async (c) => {
 		return oauthError(c, 'invalid_request', 'token must be a string');
 	}
 	if (parsed.data.token) {
-		await logout(c.env, parsed.data.token);
+		await deleteSessionByToken(makeDb(c.env.DB), parsed.data.token);
 	}
 	return c.body(null, 200);
 });

@@ -1,11 +1,14 @@
+// test/oauth/userinfo.test.ts
 import { env, exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
 import { sessions, userRoles, users } from '../../src/schema';
-import { upsertFromVatsim } from '../../src/users/domain';
+import { setUserActive, updateProfile, upsertFromVatsim } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
 import { __resetCacheForTests } from '../../src/incubator/presence/domain';
 import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/incubator/flight-plans/domain';
+import type { OnlineController } from '../../src/incubator/presence/types';
+import type { FlightPlan } from '../../src/incubator/flight-plans/types';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
 const USERINFO = 'https://id.flyindycenter.com/oauth/userinfo';
@@ -27,20 +30,22 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-async function seed(): Promise<{ userId: string; token: string }> {
+async function seed(): Promise<{ cid: string; token: string }> {
 	const db = makeDb(env.DB);
-	const { cid: userId } = await upsertFromVatsim(
+	const { cid } = await upsertFromVatsim(
 		db,
 		makeVatsimProfile({
 			cid: '7',
 			personal: { name_first: 'Pat', name_last: 'Quinn', email: 'pat@example.com' }
 		})
 	);
-	await db
-		.insert(userRoles)
-		.values({ cid: userId, role: 'zid:admin', source: 'test', grantedAt: Date.now() });
-	const { token } = await createSession(db, userId);
-	return { userId, token };
+	await db.insert(userRoles).values({ cid, role: 'community:admin', source: 'test', grantedAt: 1 });
+	const { token } = await createSession(db, cid);
+	return { cid, token };
+}
+
+function userinfo(token: string): Promise<Response> {
+	return exports.default.fetch(USERINFO, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 async function expectInvalidToken(res: Response) {
@@ -50,45 +55,96 @@ async function expectInvalidToken(res: Response) {
 }
 
 describe('GET /oauth/userinfo', () => {
-	it('returns standard claims plus the session context, dates as ISO strings', async () => {
+	it('returns flat claims with email and presence', async () => {
 		const { token } = await seed();
-		const res = await exports.default.fetch(USERINFO, {
-			headers: { Authorization: `Bearer ${token}` }
-		});
+		const res = await userinfo(token);
 		expect(res.status).toBe(200);
 		expect(res.headers.get('Cache-Control')).toBe('no-store');
-		const body = (await res.json()) as {
-			sub: string;
-			email: string;
-			name: string;
-			user: { cid: string };
-			roles: string[];
-			sessionExpiresAt: string;
-			activeSession: null;
-			activeFlightPlan: null;
+		expect(await res.json()).toEqual({
+			sub: '7',
+			email: 'pat@example.com',
+			name: 'Pat Quinn',
+			given_name: 'Pat',
+			family_name: 'Quinn',
+			preferred_name: null,
+			pronouns: null,
+			rating: 'OBS',
+			pilot_rating: null,
+			division: null,
+			region: null,
+			subdivision: null,
+			roles: ['community:admin'],
+			operating_initials: null,
+			discord_id: null,
+			active: true,
+			active_session: null,
+			active_flight_plan: null
+		});
+	});
+
+	it('uses the preferred name for name', async () => {
+		const { cid, token } = await seed();
+		await updateProfile(makeDb(env.DB), cid, { preferredName: 'PQ' });
+		expect(((await (await userinfo(token)).json()) as { name: string }).name).toBe('PQ');
+	});
+
+	it('includes the live controller session and filed flight plan', async () => {
+		const { token } = await seed();
+		const controller = {
+			artccId: 'ZID',
+			primaryFacilityId: 'IND',
+			primaryPositionId: 'TWR',
+			role: 'controller',
+			positions: [],
+			isActive: true,
+			isObserver: false,
+			loginTime: '2026-05-15T10:00:00Z',
+			vatsimData: {
+				cid: '7',
+				realName: 'Pat Quinn',
+				controllerInfo: '',
+				userRating: 'S2',
+				callsign: 'IND_TWR',
+				loginTime: '2026-05-15T10:00:00Z'
+			}
+		} satisfies OnlineController;
+		const plan: FlightPlan = {
+			departure: 'KIND',
+			arrival: 'KCMH',
+			alternate: 'KDAY',
+			flight_rules: 'I',
+			aircraft: 'B738/L'
 		};
-		expect(body.sub).toBe('7');
-		expect(body.email).toBe('pat@example.com');
-		expect(body.name).toBe('Pat Quinn');
-		expect(body.user.cid).toBe('7');
-		expect(body.roles).toEqual(['zid:admin']);
-		expect(body.sessionExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-		expect(new Date(body.sessionExpiresAt).getTime()).toBeGreaterThan(Date.now());
-		expect(body.activeSession).toBeNull();
-		expect(body.activeFlightPlan).toBeNull();
+		vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
+			const u = String(url);
+			if (u.includes('live.env.vnas.vatsim.net')) {
+				return Response.json({ controllers: [controller] });
+			}
+			if (u.includes('data.vatsim.net')) {
+				return Response.json({ pilots: [{ cid: 7, flight_plan: plan }] });
+			}
+			return new Response('not found', { status: 404 });
+		});
+		const body = (await (await userinfo(token)).json()) as {
+			active_session: OnlineController | null;
+			active_flight_plan: FlightPlan | null;
+		};
+		expect(body.active_session?.vatsimData.callsign).toBe('IND_TWR');
+		expect(body.active_flight_plan?.departure).toBe('KIND');
 	});
 
-	it('401s with invalid_token for a missing token', async () => {
+	it('rejects a disabled user', async () => {
+		const { cid, token } = await seed();
+		await setUserActive(makeDb(env.DB), cid, false);
+		await expectInvalidToken(await userinfo(token));
+	});
+
+	it('rejects a missing or unknown token', async () => {
 		await expectInvalidToken(await exports.default.fetch(USERINFO));
+		await expectInvalidToken(await userinfo('nope'));
 	});
 
-	it('401s with invalid_token for an unknown token', async () => {
-		await expectInvalidToken(
-			await exports.default.fetch(USERINFO, { headers: { Authorization: 'Bearer nope' } })
-		);
-	});
-
-	it('401s with invalid_token for an empty bearer token', async () => {
+	it('rejects an empty bearer token', async () => {
 		await expectInvalidToken(
 			await exports.default.fetch(USERINFO, { headers: { Authorization: 'Bearer ' } })
 		);
