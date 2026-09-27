@@ -1,5 +1,7 @@
 // src/oauth/redirect-uri.ts
+import type { DB } from '../db';
 import { IdentityError } from '../errors';
+import { findClient } from '../clients/domain';
 
 // Where identity may send a browser: https on flyindycenter.com or one level
 // of subdomain, or http on a loopback host (RFC 8252 §7.3) at any port. Both
@@ -12,6 +14,22 @@ const LOOPBACK = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/[^\s]*)?$/
 
 export function isAllowedRedirectUri(url: string): boolean {
 	return PRODUCTION.test(url) || LOOPBACK.test(url);
+}
+
+export const REDIRECT_URI_MAX_LENGTH = 2048;
+
+/**
+ * Whether identity may send `clientId`'s authorization code to `uri`. A
+ * registered client gets exact matching against its own redirect_uris (a
+ * service with none cannot use the code flow); an unregistered client_id is a
+ * first-party label trusted by the allowlist.
+ */
+export async function redirectAllowedFor(db: DB, clientId: string, uri: string): Promise<boolean> {
+	if (uri.length > REDIRECT_URI_MAX_LENGTH) {
+		return false;
+	}
+	const client = await findClient(db, clientId);
+	return client ? (client.redirectUris ?? []).includes(uri) : isAllowedRedirectUri(uri);
 }
 
 /** CORS origin allowlist. Same rules as redirect URIs. */

@@ -33,10 +33,13 @@ describe('parseClientCredentials', () => {
 		);
 	});
 
-	it('is invalid when both methods are used or Basic is malformed', () => {
-		expect(parseClientCredentials(basic('a', 'b'), { client_secret: 'b' })).toBe('invalid');
-		expect(parseClientCredentials('Basic !!!', {})).toBe('invalid');
-		expect(parseClientCredentials(`Basic ${btoa('nocolon')}`, {})).toBe('invalid');
-		expect(parseClientCredentials(`Basic ${btoa('a:%E0%A4%A')}`, {})).toBe('invalid');
+	it('is ambiguous when both methods are used', () => {
+		expect(parseClientCredentials(basic('a', 'b'), { client_secret: 'b' })).toBe('ambiguous');
+	});
+
+	it('is malformed when the Basic header cannot be decoded', () => {
+		expect(parseClientCredentials('Basic !!!', {})).toBe('malformed');
+		expect(parseClientCredentials(`Basic ${btoa('nocolon')}`, {})).toBe('malformed');
+		expect(parseClientCredentials(`Basic ${btoa('a:%E0%A4%A')}`, {})).toBe('malformed');
 	});
 });

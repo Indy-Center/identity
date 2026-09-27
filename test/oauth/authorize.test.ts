@@ -248,6 +248,10 @@ describe('GET /oauth/authorize — registered clients', () => {
 		);
 	});
 
+	it('rejects an over-long client_id before looking it up', async () => {
+		await expectErrorCode(await authorize('x'.repeat(2049), MOODLE_REDIRECT), 'validation_failed');
+	});
+
 	it('still rejects an off-domain redirect_uri for an unregistered client', async () => {
 		await expectErrorCode(await authorize('moodle', MOODLE_REDIRECT), 'invalid_return_url');
 	});

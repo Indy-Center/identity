@@ -300,4 +300,32 @@ describe('POST /oauth/token for a registered client', () => {
 			'invalid_request'
 		);
 	});
+
+	it('rejects a malformed Basic header with 401 invalid_client', async () => {
+		const { code } = await seedCode();
+		await expectInvalidClient(
+			await postToken(
+				{ grant_type: 'authorization_code', code, redirect_uri: REDIRECT, client_id: 'charts' },
+				{ Authorization: 'Basic !!!' }
+			)
+		);
+	});
+
+	it('rejects Basic plus a form client_secret with invalid_request', async () => {
+		const db = makeDb(env.DB);
+		const secret = await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const { code } = await seedCode(MOODLE_REDIRECT, 'moodle');
+		await expectOAuthError(
+			await postToken(
+				{
+					grant_type: 'authorization_code',
+					code,
+					redirect_uri: MOODLE_REDIRECT,
+					client_secret: secret
+				},
+				basic('moodle', secret)
+			),
+			'invalid_request'
+		);
+	});
 });

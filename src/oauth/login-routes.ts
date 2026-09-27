@@ -7,7 +7,7 @@ import { createSession, deleteAllSessionsForUser, findSessionByToken } from '../
 import { upsertFromVatsim } from '../users/domain';
 import { IdentityError } from '../errors';
 import { createAuthorizationCode } from './codes';
-import { buildRedirectWithCode, isAllowedRedirectUri, validateReturnUrl } from './redirect-uri';
+import { buildRedirectWithCode, redirectAllowedFor, validateReturnUrl } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
 
 // Only /login/callback lives here: it is the redirect URI registered with
@@ -28,9 +28,10 @@ const CallbackInputSchema = z
 	})
 	.refine((d) => d.state === d.stateCookie, { message: 'state cookie mismatch' });
 
-// The authorize request /oauth/authorize stored in __Host-oauth_return.
+// The authorize request /oauth/authorize stored in __Host-oauth_return. Its
+// redirectUri is re-checked against the client in the handler.
 const ReturnCookieSchema = z.object({
-	redirectUri: z.string().refine(isAllowedRedirectUri),
+	redirectUri: z.string().min(1),
 	clientId: z.string().min(1),
 	state: z.string().optional()
 });
@@ -57,12 +58,19 @@ loginRoutes.get('/callback', async (c) => {
 		throw new IdentityError('invalid_state', 400, 'OAuth state cookie missing or mismatched');
 	}
 	const { code } = parsed.data;
+	const db = makeDb(c.env.DB);
 	const authorizeRequest = parseReturnCookie(getCookie(c, 'oauth_return', 'host'));
-	if (!authorizeRequest) {
+	// Re-check the redirect now, not just at /oauth/authorize: the cookie is
+	// only as trustworthy as the browser, and the client's redirect_uris may
+	// have changed mid-login.
+	if (
+		!authorizeRequest ||
+		!(await redirectAllowedFor(db, authorizeRequest.clientId, authorizeRequest.redirectUri))
+	) {
 		throw new IdentityError(
 			'invalid_state',
 			400,
-			'oauth_return cookie missing or malformed — start the login at /oauth/authorize'
+			'oauth_return cookie missing, malformed, or not allowed for its client — start the login at /oauth/authorize'
 		);
 	}
 
@@ -75,7 +83,6 @@ loginRoutes.get('/callback', async (c) => {
 	}
 
 	const profile = await fetchVatsimProfile(c.env.CONNECT_BASE_URL, accessToken);
-	const db = makeDb(c.env.DB);
 	const user = await upsertFromVatsim(db, profile);
 	if (!user.active) {
 		throw new IdentityError('access_denied', 403, 'account disabled');

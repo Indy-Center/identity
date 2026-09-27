@@ -2,14 +2,15 @@
 import { env, exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
-import { sessions, userRoles, users } from '../../src/schema';
+import { clients, clientTokens, sessions, userRoles, users } from '../../src/schema';
 import { setUserActive, updateProfile, upsertFromVatsim } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
 import { __resetCacheForTests } from '../../src/incubator/presence/domain';
 import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/incubator/flight-plans/domain';
 import type { OnlineController } from '../../src/incubator/presence/types';
 import type { FlightPlan } from '../../src/incubator/flight-plans/types';
-import { makeVatsimProfile } from '../helpers/fixtures';
+import { issueClientToken } from '../../src/clients/domain';
+import { makeVatsimProfile, seedClient } from '../helpers/fixtures';
 
 const USERINFO = 'https://id.flyindycenter.com/oauth/userinfo';
 
@@ -18,6 +19,8 @@ beforeEach(async () => {
 	await db.delete(userRoles);
 	await db.delete(sessions);
 	await db.delete(users);
+	await db.delete(clientTokens);
+	await db.delete(clients);
 	// No live feeds in tests: both lookups 404 and degrade to null.
 	vi.spyOn(globalThis, 'fetch').mockImplementation(
 		async () => new Response('not found', { status: 404 })
@@ -165,5 +168,18 @@ describe('GET /oauth/userinfo', () => {
 				headers: { Cookie: `fic_session=${token}; __Host-identity_session=${token}` }
 			})
 		);
+	});
+});
+
+describe('GET /oauth/userinfo with a client token', () => {
+	it('401s: a client-credentials token is not a user session', async () => {
+		const db = makeDb(env.DB);
+		await seedClient(db, 'bot', { scopes: ['users:read'] });
+		const { token } = await issueClientToken(db, 'bot', ['users:read']);
+		const res = await exports.default.fetch(USERINFO, {
+			headers: { Authorization: `Bearer ${token}` }
+		});
+		expect(res.status).toBe(401);
+		expect(((await res.json()) as { error: string }).error).toBe('invalid_token');
 	});
 });

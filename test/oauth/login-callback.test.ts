@@ -2,9 +2,10 @@ import { exports, env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeDb } from '../../src/db';
-import { authorizationCodes, users, sessions } from '../../src/schema';
+import { authorizationCodes, clients, users, sessions } from '../../src/schema';
 import { upsertFromVatsim, setUserActive } from '../../src/users/domain';
 import { validateSession } from '../../src/sessions/domain';
+import { seedClient } from '../helpers/fixtures';
 
 const CALLBACK = 'https://id.flyindycenter.com/login/callback?code=auth_code&state=state_xyz';
 const REDIRECT = 'https://charts.flyindycenter.com/kind';
@@ -14,6 +15,7 @@ beforeEach(async () => {
 	await db.delete(authorizationCodes);
 	await db.delete(sessions);
 	await db.delete(users);
+	await db.delete(clients);
 });
 
 afterEach(() => {
@@ -200,6 +202,83 @@ describe('GET /login/callback', () => {
 		const db = makeDb(env.DB);
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 		expect(await db.select().from(users).all()).toHaveLength(0);
+		expect(await db.select().from(authorizationCodes).all()).toHaveLength(0);
+	});
+});
+
+describe('GET /login/callback — registered off-domain client', () => {
+	const MOODLE_REDIRECT = 'https://moodle.example.org/admin/oauth2callback.php';
+
+	// Start at /oauth/authorize and carry its cookies to the callback, as a
+	// browser would after VATSIM sends it back.
+	async function startLogin(): Promise<{ cookie: string; state: string }> {
+		const res = await exports.default.fetch(
+			`https://id.flyindycenter.com/oauth/authorize?${new URLSearchParams({
+				response_type: 'code',
+				client_id: 'moodle',
+				redirect_uri: MOODLE_REDIRECT,
+				state: 'moodle_state'
+			})}`,
+			{ redirect: 'manual' }
+		);
+		expect(res.status).toBe(302);
+		const pairs = res.headers.getSetCookie().map((c) => c.split(';')[0]!);
+		const state = pairs.find((p) => p.startsWith('__Host-oauth_state='))!.split('=')[1]!;
+		return { cookie: pairs.join('; '), state };
+	}
+
+	function finishLogin(cookie: string, state: string): Promise<Response> {
+		return exports.default.fetch(
+			`https://id.flyindycenter.com/login/callback?code=auth_code&state=${state}`,
+			{ redirect: 'manual', headers: { Cookie: cookie } }
+		);
+	}
+
+	it('redirects to the registered URI with a code the client can redeem', async () => {
+		const db = makeDb(env.DB);
+		const secret = await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const { cookie, state } = await startLogin();
+		mockVatsim();
+
+		const res = await finishLogin(cookie, state);
+		expect(res.status).toBe(302);
+		const location = new URL(res.headers.get('Location')!);
+		expect(location.origin + location.pathname).toBe(MOODLE_REDIRECT);
+		expect(location.searchParams.get('state')).toBe('moodle_state');
+		const code = location.searchParams.get('code')!;
+
+		const token = await exports.default.fetch('https://id.flyindycenter.com/oauth/token', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+				Authorization: `Basic ${btoa(`moodle:${secret}`)}`
+			},
+			body: new URLSearchParams({
+				grant_type: 'authorization_code',
+				code,
+				redirect_uri: MOODLE_REDIRECT
+			}).toString()
+		});
+		expect(token.status).toBe(200);
+		const body = (await token.json()) as { access_token: string };
+		expect((await validateSession(db, body.access_token))?.cid).toBe('999');
+	});
+
+	it('400s if the client no longer lists the URI when the login finishes', async () => {
+		const db = makeDb(env.DB);
+		await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const { cookie, state } = await startLogin();
+		await db
+			.update(clients)
+			.set({ redirectUris: ['https://moodle.example.org/other'] })
+			.where(eq(clients.id, 'moodle'));
+		const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+		const res = await finishLogin(cookie, state);
+		expect(res.status).toBe(400);
+		expect(res.headers.get('Location')).toBeNull();
+		expect(((await res.json()) as { error: { code: string } }).error.code).toBe('invalid_state');
+		expect(fetchSpy).not.toHaveBeenCalled();
 		expect(await db.select().from(authorizationCodes).all()).toHaveLength(0);
 	});
 });

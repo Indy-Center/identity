@@ -15,7 +15,7 @@ import { toClaims } from '../users/claims';
 import { getActiveSession } from '../incubator/presence/domain';
 import { getFlightPlan } from '../incubator/flight-plans/domain';
 import { createAuthorizationCode, exchangeAuthorizationCode } from './codes';
-import { buildRedirectWithCode, isAllowedOrigin, isAllowedRedirectUri } from './redirect-uri';
+import { buildRedirectWithCode, isAllowedOrigin, redirectAllowedFor } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
 import {
 	authenticateClient,
@@ -68,7 +68,6 @@ function bearerToken(c: Context<Env>): string {
 }
 
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
-const REDIRECT_URI_MAX_LENGTH = 2048;
 
 const AuthorizeQuerySchema = z.object({
 	response_type: z.literal('code'),
@@ -77,28 +76,8 @@ const AuthorizeQuerySchema = z.object({
 });
 
 oauthRoutes.get('/authorize', async (c) => {
-	// Validate the redirect target first: every later failure is reported to
-	// the browser here, never by redirecting to an unvalidated URI.
-	const redirectUri = c.req.query('redirect_uri');
-	const db = makeDb(c.env.DB);
-	const requestedClientId = c.req.query('client_id');
-	const client = requestedClientId ? await findClient(db, requestedClientId) : null;
-	// A registered client gets exact matching against its own list (and a
-	// service with no redirect_uris cannot use this flow); an unregistered
-	// client_id is a first-party label trusted by the allowlist.
-	const allowed =
-		!!redirectUri &&
-		redirectUri.length <= REDIRECT_URI_MAX_LENGTH &&
-		(client
-			? (client.redirectUris ?? []).includes(redirectUri)
-			: isAllowedRedirectUri(redirectUri));
-	if (!allowed) {
-		throw new IdentityError(
-			'invalid_return_url',
-			400,
-			'redirect_uri is not registered for this client, or not on flyindycenter.com or a loopback origin'
-		);
-	}
+	// Every failure here is a 400 to the browser, never a redirect to an
+	// unvalidated URI.
 	const parsed = AuthorizeQuerySchema.safeParse({
 		response_type: c.req.query('response_type'),
 		client_id: c.req.query('client_id'),
@@ -109,6 +88,15 @@ oauthRoutes.get('/authorize', async (c) => {
 			'validation_failed',
 			400,
 			'response_type=code and client_id are required'
+		);
+	}
+	const db = makeDb(c.env.DB);
+	const redirectUri = c.req.query('redirect_uri');
+	if (!redirectUri || !(await redirectAllowedFor(db, parsed.data.client_id, redirectUri))) {
+		throw new IdentityError(
+			'invalid_return_url',
+			400,
+			'redirect_uri is not registered for this client, or not on flyindycenter.com or a loopback origin'
 		);
 	}
 	const { client_id: clientId, state } = parsed.data;
@@ -163,8 +151,13 @@ oauthRoutes.post('/token', async (c) => {
 	}
 	const form = await parseFormBody(c);
 	const credentials = parseClientCredentials(c.req.header('Authorization'), form);
-	if (credentials === 'invalid') {
+	// Both methods at once is a malformed request (§2.3); an undecodable
+	// Basic header is failed client authentication (§5.2).
+	if (credentials === 'ambiguous') {
 		return oauthError(c, 'invalid_request', 'use exactly one client authentication method');
+	}
+	if (credentials === 'malformed') {
+		return invalidClient(c);
 	}
 	const db = makeDb(c.env.DB);
 	c.header('Cache-Control', 'no-store');
