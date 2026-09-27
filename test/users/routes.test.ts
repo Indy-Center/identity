@@ -5,7 +5,7 @@ import { makeDb } from '../../src/db';
 import { clients, clientTokens, sessions, userRoles, users } from '../../src/schema';
 import { issueClientToken } from '../../src/clients/domain';
 import { createSession } from '../../src/sessions/domain';
-import { upsertFromVatsim } from '../../src/users/domain';
+import { getUser, upsertFromVatsim } from '../../src/users/domain';
 import { listRoleGrants } from '../../src/users/roles';
 import type { Scope } from '../../src/schema';
 import { makeVatsimProfile, seedClient } from '../helpers/fixtures';
@@ -93,7 +93,7 @@ describe('GET /api/users', () => {
 		);
 	});
 
-	it('lists more users than D1 binds parameters per query, each with its own roles', async () => {
+	it('lists 150 holders of a role, each with all of their own roles', async () => {
 		const token = await clientToken('bot', ['users:read']);
 		const cids = Array.from({ length: 150 }, (_, i) => String(1000 + i));
 		const now = Date.now();
@@ -161,6 +161,42 @@ describe('PATCH /api/users/:cid', () => {
 			'insufficient_scope'
 		);
 		expect((await api('PATCH', '/users/1', write, { email: 'x@y.z' })).status).toBe(400);
+	});
+
+	it('400 validation_failed for malformed JSON or a non-JSON content type', async () => {
+		const token = await clientToken('community', ['users:write']);
+		const send = (contentType: string, body: string) =>
+			exports.default.fetch(`${BASE}/users/1`, {
+				method: 'PATCH',
+				headers: { Authorization: `Bearer ${token}`, 'Content-Type': contentType },
+				body
+			});
+		const malformed = await send('application/json', '{bad');
+		expect(malformed.status).toBe(400);
+		expect(await errorCode(malformed)).toBe('validation_failed');
+		const plain = await send('text/plain', '{"active":false}');
+		expect(plain.status).toBe(400);
+		expect(await errorCode(plain)).toBe('validation_failed');
+		const missing = await exports.default.fetch(`${BASE}/users/1`, {
+			method: 'PATCH',
+			headers: { Authorization: `Bearer ${token}` },
+			body: '{"active":false}'
+		});
+		expect(await errorCode(missing)).toBe('validation_failed');
+		expect((await getUser(db(), '1'))?.active).toBe(true);
+	});
+
+	it('rejects disabled_reason unless active is false in the same body', async () => {
+		const token = await clientToken('community', ['users:write']);
+		expect(
+			await errorCode(await api('PATCH', '/users/1', token, { disabled_reason: 'spam' }))
+		).toBe('validation_failed');
+		expect(
+			(await api('PATCH', '/users/1', token, { active: true, disabled_reason: 'spam' })).status
+		).toBe(400);
+		expect(
+			(await api('PATCH', '/users/1', token, { active: false, disabled_reason: 'spam' })).status
+		).toBe(200);
 	});
 
 	it('404 for an unknown cid', async () => {

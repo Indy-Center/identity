@@ -28,30 +28,23 @@ export async function listRoles(db: DB, cid: string): Promise<string[]> {
 	return rows.map((r) => r.role).sort();
 }
 
-// D1 binds at most 100 parameters per query.
-const MAX_BOUND_PARAMS = 100;
-
-/** listRoles for many users at once, keyed by cid (every cid present, possibly []). */
-export async function listRolesByCid(db: DB, cids: string[]): Promise<Map<string, string[]>> {
-	const byCid = new Map(cids.map((cid) => [cid, [] as string[]]));
-	const unique = [...byCid.keys()];
-	const chunks = Array.from({ length: Math.ceil(unique.length / MAX_BOUND_PARAMS) }, (_, i) =>
-		unique.slice(i * MAX_BOUND_PARAMS, (i + 1) * MAX_BOUND_PARAMS)
-	);
-	const results = await Promise.all(
-		chunks.map((chunk) =>
-			db
-				.selectDistinct({ cid: userRoles.cid, role: userRoles.role })
-				.from(userRoles)
-				.where(inArray(userRoles.cid, chunk))
-				.all()
-		)
-	);
-	for (const { cid, role } of results.flat()) {
-		byCid.get(cid)!.push(role);
-	}
-	for (const roles of byCid.values()) {
-		roles.sort();
+/**
+ * Every role of every user who holds `role`, keyed by cid. One query with a
+ * subquery, so it binds one parameter however many holders there are.
+ */
+export async function listRolesOfHolders(db: DB, role: string): Promise<Map<string, string[]>> {
+	const holders = db.select({ cid: userRoles.cid }).from(userRoles).where(eq(userRoles.role, role));
+	const rows = await db
+		.selectDistinct({ cid: userRoles.cid, role: userRoles.role })
+		.from(userRoles)
+		.where(inArray(userRoles.cid, holders))
+		.orderBy(asc(userRoles.role))
+		.all();
+	const byCid = new Map<string, string[]>();
+	for (const r of rows) {
+		const roles = byCid.get(r.cid) ?? [];
+		roles.push(r.role);
+		byCid.set(r.cid, roles);
 	}
 	return byCid;
 }

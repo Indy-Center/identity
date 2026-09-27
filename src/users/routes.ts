@@ -14,7 +14,7 @@ import {
 	RoleRemovePatternSchema,
 	listRoleGrants,
 	listRoles,
-	listRolesByCid,
+	listRolesOfHolders,
 	patchRoles
 } from './roles';
 import { toClaims } from './claims';
@@ -31,21 +31,26 @@ const SelfFields = {
 	pronouns: z.string().trim().min(1).max(32).nullable().optional()
 };
 const SelfPatchSchema = z.strictObject(SelfFields);
-const UserPatchSchema = z.strictObject({
-	...SelfFields,
-	operating_initials: z
-		.string()
-		.regex(/^[A-Z]{2}$/)
-		.nullable()
-		.optional(),
-	discord_id: z
-		.string()
-		.regex(/^\d{17,20}$/)
-		.nullable()
-		.optional(),
-	active: z.boolean().optional(),
-	disabled_reason: z.string().trim().max(500).optional()
-});
+const UserPatchSchema = z
+	.strictObject({
+		...SelfFields,
+		operating_initials: z
+			.string()
+			.regex(/^[A-Z]{2}$/)
+			.nullable()
+			.optional(),
+		discord_id: z
+			.string()
+			.regex(/^\d{17,20}$/)
+			.nullable()
+			.optional(),
+		active: z.boolean().optional(),
+		disabled_reason: z.string().trim().max(500).optional()
+	})
+	.refine((b) => b.disabled_reason === undefined || b.active === false, {
+		message: 'disabled_reason requires active: false',
+		path: ['disabled_reason']
+	});
 const ListQuery = z
 	.object({ role: RoleNameSchema.optional(), discord_id: z.string().min(1).optional() })
 	.refine((q) => (q.role === undefined) !== (q.discord_id === undefined), {
@@ -84,13 +89,14 @@ apiRoutes.get(
 	async (c) => {
 		const q = c.req.valid('query');
 		const db = makeDb(c.env.DB);
-		const found = await listUsers(db, q.role ? { role: q.role } : { discordId: q.discord_id! });
-		// One roles query per 100 users, not one per user.
-		const roles = await listRolesByCid(
-			db,
-			found.map((u) => u.cid)
-		);
-		return c.json(found.map((u) => toClaims(u, roles.get(u.cid)!)));
+		if (q.discord_id !== undefined) {
+			// discord_id is unique: at most one user.
+			const found = await listUsers(db, { discordId: q.discord_id });
+			return c.json(await Promise.all(found.map((u) => claimsFor(db, u))));
+		}
+		const found = await listUsers(db, { role: q.role! });
+		const roles = await listRolesOfHolders(db, q.role!);
+		return c.json(found.map((u) => toClaims(u, roles.get(u.cid) ?? [])));
 	}
 );
 

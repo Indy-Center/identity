@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { errorHandler } from './error-handler';
+import { errorHandler, notFoundHandler } from './error-handler';
 import { loginRoutes, logoutRoutes } from './oauth/login-routes';
 import { oauthRoutes } from './oauth/routes';
 import { apiRoutes } from './users/routes';
@@ -7,6 +7,7 @@ import { apiRoutes } from './users/routes';
 export function buildApp() {
 	const app = new Hono<{ Bindings: Cloudflare.Env }>();
 	app.onError(errorHandler);
+	app.notFound(notFoundHandler);
 	// /healthz inlined — single endpoint, doesn't need its own router
 	app.get('/healthz', (c) => c.json({ ok: true }));
 	app.route('/oauth', oauthRoutes);
