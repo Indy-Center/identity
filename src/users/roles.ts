@@ -18,6 +18,9 @@ export const RoleRemovePatternSchema = z.union([
 
 export type RolePatch = { add?: string[]; remove?: string[] };
 
+// Documents listRoleGrants()'s shape for OpenAPI; not used to validate anything.
+export const RoleGrantSchema = z.object({ role: z.string(), source: z.string() });
+
 /** A user's effective roles: the distinct union across every source, sorted. */
 export async function listRoles(db: DB, cid: string): Promise<string[]> {
 	const rows = await db

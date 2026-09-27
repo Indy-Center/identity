@@ -2,14 +2,16 @@
 // /api/users and /api/me. Every route runs behind `principal`; see
 // src/api/principal.ts for who may call what. No CORS: server-to-server only.
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
+import { describeRoute, resolver } from 'hono-openapi';
 import { z } from 'zod';
 import { makeDb } from '../db';
 import { IdentityError } from '../errors';
 import { validate } from '../validation';
+import { errors } from '../openapi';
 import { principal, requireScope, roleSource, type ApiEnv } from '../api/principal';
 import { getUser, listUsers, setUserActive, updateProfile, type ProfilePatch } from './domain';
 import {
+	RoleGrantSchema,
 	RoleNameSchema,
 	RoleRemovePatternSchema,
 	listRoleGrants,
@@ -17,7 +19,7 @@ import {
 	listRolesOfHolders,
 	patchRoles
 } from './roles';
-import { toClaims } from './claims';
+import { ClaimsSchema, toClaims } from './claims';
 import type { DB } from '../db';
 import type { User } from '../schema';
 
@@ -64,6 +66,11 @@ const RolePatchSchema = z.strictObject({
 const tags = ['Users'];
 const bearer = [{ bearerAuth: [] }];
 
+/** A describeRoute() `responses` 200 entry for a zod schema. */
+function ok(description: string, schema: z.ZodTypeAny) {
+	return { description, content: { 'application/json': { schema: resolver(schema) } } };
+}
+
 async function claimsFor(db: DB, user: User) {
 	return toClaims(user, await listRoles(db, user.cid));
 }
@@ -82,7 +89,11 @@ apiRoutes.get(
 	describeRoute({
 		tags,
 		security: bearer,
-		summary: 'List users by role or Discord ID (users:read)'
+		summary: 'List users by role or Discord ID (users:read)',
+		responses: {
+			200: ok('Claims for each matching user', z.array(ClaimsSchema)),
+			...errors(401, 403)
+		}
 	}),
 	requireScope('users:read'),
 	validate('query', ListQuery),
@@ -102,7 +113,12 @@ apiRoutes.get(
 
 apiRoutes.get(
 	'/users/:cid',
-	describeRoute({ tags, security: bearer, summary: 'Get a user by CID (users:read)' }),
+	describeRoute({
+		tags,
+		security: bearer,
+		summary: 'Get a user by CID (users:read)',
+		responses: { 200: ok('The user', ClaimsSchema), ...errors(401, 403, 404) }
+	}),
 	requireScope('users:read'),
 	validate('param', CidParam),
 	async (c) => {
@@ -117,7 +133,12 @@ apiRoutes.get(
 
 apiRoutes.patch(
 	'/users/:cid',
-	describeRoute({ tags, security: bearer, summary: 'Update identity-owned fields (users:write)' }),
+	describeRoute({
+		tags,
+		security: bearer,
+		summary: 'Update identity-owned fields (users:write)',
+		responses: { 200: ok('The updated user', ClaimsSchema), ...errors(401, 403, 404, 409) }
+	}),
 	requireScope('users:write'),
 	validate('param', CidParam),
 	validate('json', UserPatchSchema),
@@ -138,7 +159,11 @@ apiRoutes.get(
 	describeRoute({
 		tags,
 		security: bearer,
-		summary: 'List role grants with their sources (users:read)'
+		summary: 'List role grants with their sources (users:read)',
+		responses: {
+			200: ok('Role grants with sources', z.array(RoleGrantSchema)),
+			...errors(401, 403)
+		}
 	}),
 	requireScope('users:read'),
 	validate('param', CidParam),
@@ -152,7 +177,11 @@ apiRoutes.patch(
 		security: bearer,
 		summary: "Add/remove the caller's own role grants (users:write)",
 		description:
-			'remove runs before add. remove accepts `*` and `app:*` (caller rows only). global:* cannot be added.'
+			'remove runs before add. remove accepts `*` and `app:*` (caller rows only). global:* cannot be added.',
+		responses: {
+			200: ok('The full set of roles after the patch', z.object({ roles: z.array(z.string()) })),
+			...errors(401, 403)
+		}
 	}),
 	requireScope('users:write'),
 	validate('param', CidParam),
@@ -173,7 +202,11 @@ apiRoutes.patch(
 	describeRoute({
 		tags,
 		security: bearer,
-		summary: 'Edit your own preferred name and pronouns (user token)'
+		summary: 'Edit your own preferred name and pronouns (user token)',
+		responses: {
+			200: ok('Your claims, plus email', ClaimsSchema.extend({ email: z.string() })),
+			...errors(401, 403)
+		}
 	}),
 	validate('json', SelfPatchSchema),
 	async (c) => {

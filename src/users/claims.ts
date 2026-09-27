@@ -3,9 +3,29 @@
 // exists (sub, name, given_name, family_name); snake_case custom claims
 // otherwise. Never includes email or the raw VATSIM profile: /oauth/userinfo
 // adds email for the user themself, /api/users returns this as-is.
+import { z } from 'zod';
 import type { User } from '../schema';
 
 export type Claims = ReturnType<typeof toClaims>;
+
+// Documents the toClaims() shape for OpenAPI; not used to validate anything.
+export const ClaimsSchema = z.object({
+	sub: z.string(),
+	name: z.string(),
+	given_name: z.string().nullable(),
+	family_name: z.string().nullable(),
+	preferred_name: z.string().nullable(),
+	pronouns: z.string().nullable(),
+	rating: z.string().nullable(),
+	pilot_rating: z.string().nullable(),
+	division: z.string().nullable(),
+	region: z.string().nullable(),
+	subdivision: z.string().nullable(),
+	roles: z.array(z.string()),
+	operating_initials: z.string().nullable(),
+	discord_id: z.string().nullable(),
+	active: z.boolean()
+});
 
 export function toClaims(user: User, roles: string[]) {
 	return {
