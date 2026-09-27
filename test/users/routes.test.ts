@@ -280,5 +280,10 @@ describe('users as principals', () => {
 		expect(await listRoleGrants(db(), '2')).toEqual([
 			{ role: 'events:can_sign_up', source: 'user:1' }
 		]);
+		expect((await api('PATCH', '/users/2/roles', admin, { remove: ['*'] })).status).toBe(200);
+		expect((await api('PATCH', '/users/2/roles', admin, { remove: ['global:*'] })).status).toBe(
+			403
+		);
+		expect(await listRoleGrants(db(), '2')).toEqual([]);
 	});
 });

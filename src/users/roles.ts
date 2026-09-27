@@ -78,7 +78,10 @@ function removeCondition(pattern: string) {
 /**
  * Apply a patch to the roles `source` owns for `cid`: every `remove` pattern
  * first, then every `add`, in one atomic `db.batch`. Rows owned by other sources are
- * never touched. `global:*` roles are granted only by the CLI, never here.
+ * never touched. `global:*` roles are granted and revoked only by the CLI, never
+ * here: naming them in `add` or `remove` is refused outright, even though the
+ * source scoping alone would already keep API callers off `cli` rows. A bare `*`
+ * stays allowed, because it only reaches the caller's own rows.
  */
 export async function patchRoles(
 	db: DB,
@@ -88,11 +91,11 @@ export async function patchRoles(
 ): Promise<string[]> {
 	const add = patch.add ?? [];
 	const remove = patch.remove ?? [];
-	if (add.some((r) => r.startsWith('global:'))) {
+	if (source !== 'cli' && [...add, ...remove].some((r) => r.startsWith('global:'))) {
 		throw new IdentityError(
 			'insufficient_scope',
 			403,
-			'global:* roles cannot be granted via the API'
+			'global:* roles cannot be granted or revoked via the API'
 		);
 	}
 	const owned = and(eq(userRoles.cid, cid), eq(userRoles.source, source));

@@ -100,8 +100,22 @@ describe('patchRoles', () => {
 			code: 'insufficient_scope',
 			status: 403
 		});
-		await patchRoles(db(), '1', 'c', { remove: ['*', 'global:*', 'global:admin'] });
+		await patchRoles(db(), '1', 'c', { add: ['a:b'] });
+		await patchRoles(db(), '1', 'c', { remove: ['*'] });
 		expect(await listRoles(db(), '1')).toEqual(['global:admin']);
+	});
+
+	it('refuses to remove global roles by name or namespace', async () => {
+		await db()
+			.insert(userRoles)
+			.values({ cid: '1', role: 'global:admin', source: 'cli', grantedAt: 1 });
+		for (const pattern of ['global:*', 'global:admin']) {
+			await expect(patchRoles(db(), '1', 'user:2', { remove: [pattern] })).rejects.toMatchObject({
+				code: 'insufficient_scope',
+				status: 403
+			});
+		}
+		expect(await listRoleGrants(db(), '1')).toEqual([{ role: 'global:admin', source: 'cli' }]);
 	});
 
 	it('works for a cid identity has never seen', async () => {
