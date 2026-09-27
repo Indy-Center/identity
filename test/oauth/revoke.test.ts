@@ -1,12 +1,13 @@
 import { env, exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
-import { sessions, users } from '../../src/schema';
+import { clients, clientTokens, sessions, users } from '../../src/schema';
 import { upsertFromVatsim } from '../../src/users/domain';
 import { createSession, validateSession } from '../../src/sessions/domain';
 import { __resetCacheForTests } from '../../src/incubator/presence/domain';
 import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/incubator/flight-plans/domain';
-import { makeVatsimProfile } from '../helpers/fixtures';
+import { issueClientToken, validateClientToken } from '../../src/clients/domain';
+import { makeVatsimProfile, seedClient } from '../helpers/fixtures';
 
 const BASE = 'https://id.flyindycenter.com';
 
@@ -14,6 +15,8 @@ beforeEach(async () => {
 	const db = makeDb(env.DB);
 	await db.delete(sessions);
 	await db.delete(users);
+	await db.delete(clientTokens);
+	await db.delete(clients);
 	vi.spyOn(globalThis, 'fetch').mockImplementation(
 		async () => new Response('not found', { status: 404 })
 	);
@@ -86,5 +89,15 @@ describe('POST /oauth/revoke', () => {
 
 		expect(await validateSession(db, tokenA)).toBeNull();
 		expect((await validateSession(db, tokenB))?.cid).toBe(userId);
+	});
+
+	it('revokes a client token', async () => {
+		const db = makeDb(env.DB);
+		await seedClient(db, 'bot', { scopes: ['users:read'] });
+		const { token } = await issueClientToken(db, 'bot', ['users:read']);
+		expect(await validateClientToken(db, token)).not.toBeNull();
+		const res = await revoke(token);
+		expect(res.status).toBe(200);
+		expect(await validateClientToken(db, token)).toBeNull();
 	});
 });

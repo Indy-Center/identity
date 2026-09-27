@@ -1,10 +1,10 @@
 import { env, exports } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDb } from '../../src/db';
-import { authorizationCodes, sessions, users } from '../../src/schema';
+import { authorizationCodes, clients, sessions, users } from '../../src/schema';
 import { setUserActive, upsertFromVatsim } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
-import { makeVatsimProfile } from '../helpers/fixtures';
+import { makeVatsimProfile, seedClient } from '../helpers/fixtures';
 
 const REDIRECT = 'https://charts.flyindycenter.com/kind?tab=charts';
 
@@ -19,6 +19,7 @@ beforeEach(async () => {
 	await db.delete(authorizationCodes);
 	await db.delete(sessions);
 	await db.delete(users);
+	await db.delete(clients);
 });
 
 async function expectErrorCode(res: Response, code: string) {
@@ -209,5 +210,45 @@ describe('GET /oauth/authorize — with an identity session (SSO)', () => {
 			.find((c) => c.startsWith('__Host-identity_session='));
 		expect(cleared).toMatch(/^__Host-identity_session=;/);
 		expect(cleared).toContain('Max-Age=0');
+	});
+});
+
+describe('GET /oauth/authorize — registered clients', () => {
+	const MOODLE_REDIRECT = 'https://moodle.example.org/admin/oauth2callback.php';
+	const authorize = (clientId: string, redirectUri: string) =>
+		exports.default.fetch(
+			authorizeUrl({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri }),
+			{ redirect: 'manual' }
+		);
+
+	it('accepts an exactly registered redirect_uri even off our domain', async () => {
+		await seedClient(makeDb(env.DB), 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const res = await authorize('moodle', MOODLE_REDIRECT);
+		expect(res.status).toBe(302); // on to VATSIM
+		expect(res.headers.get('Location')).not.toContain('moodle.example.org');
+	});
+
+	it('rejects any other redirect_uri, even an allowlisted one', async () => {
+		await seedClient(makeDb(env.DB), 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		await expectErrorCode(
+			await authorize('moodle', `${MOODLE_REDIRECT}?x=1`),
+			'invalid_return_url'
+		);
+		await expectErrorCode(
+			await authorize('moodle', 'https://charts.flyindycenter.com/'),
+			'invalid_return_url'
+		);
+	});
+
+	it('rejects a service client that has no redirect_uris', async () => {
+		await seedClient(makeDb(env.DB), 'bot', { scopes: ['users:read'] });
+		await expectErrorCode(
+			await authorize('bot', 'https://charts.flyindycenter.com/'),
+			'invalid_return_url'
+		);
+	});
+
+	it('still rejects an off-domain redirect_uri for an unregistered client', async () => {
+		await expectErrorCode(await authorize('moodle', MOODLE_REDIRECT), 'invalid_return_url');
 	});
 });

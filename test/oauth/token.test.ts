@@ -2,12 +2,12 @@ import { env, exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeDb } from '../../src/db';
-import { authorizationCodes, sessions, users } from '../../src/schema';
+import { authorizationCodes, clients, sessions, users } from '../../src/schema';
 import { setUserActive, upsertFromVatsim } from '../../src/users/domain';
 import { validateSession } from '../../src/sessions/domain';
 import { createAuthorizationCode } from '../../src/oauth/codes';
 import { sha256Hex } from '../../src/crypto';
-import { makeVatsimProfile } from '../helpers/fixtures';
+import { makeVatsimProfile, seedClient } from '../helpers/fixtures';
 
 const TOKEN_URL = 'https://id.flyindycenter.com/oauth/token';
 const REDIRECT = 'http://localhost:5173/kind';
@@ -17,23 +17,30 @@ beforeEach(async () => {
 	await db.delete(authorizationCodes);
 	await db.delete(sessions);
 	await db.delete(users);
+	await db.delete(clients);
 });
 
 afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-async function seedCode(redirectUri = REDIRECT): Promise<{ userId: string; code: string }> {
+async function seedCode(
+	redirectUri = REDIRECT,
+	clientId = 'charts'
+): Promise<{ userId: string; code: string }> {
 	const db = makeDb(env.DB);
 	const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
-	const { code } = await createAuthorizationCode(db, userId, redirectUri, 'charts');
+	const { code } = await createAuthorizationCode(db, userId, redirectUri, clientId);
 	return { userId, code };
 }
 
-function postToken(fields: Record<string, string>): Promise<Response> {
+function postToken(
+	fields: Record<string, string>,
+	headers: Record<string, string> = {}
+): Promise<Response> {
 	return exports.default.fetch(TOKEN_URL, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
 		body: new URLSearchParams(fields).toString()
 	});
 }
@@ -170,5 +177,127 @@ describe('POST /oauth/token', () => {
 			})
 		});
 		await expectOAuthError(res, 'invalid_request');
+	});
+});
+
+describe('POST /oauth/token for a registered client', () => {
+	const MOODLE_REDIRECT = 'https://moodle.example.org/admin/oauth2callback.php';
+	const basic = (id: string, secret: string) => ({
+		Authorization: `Basic ${btoa(`${id}:${secret}`)}`
+	});
+
+	async function expectInvalidClient(res: Response) {
+		expect(res.status).toBe(401);
+		expect(res.headers.get('Cache-Control')).toBe('no-store');
+		expect(res.headers.get('WWW-Authenticate')).toBe('Basic realm="identity"');
+		expect(((await res.json()) as { error: string }).error).toBe('invalid_client');
+	}
+
+	it('requires and accepts the client secret (client_secret_post)', async () => {
+		const db = makeDb(env.DB);
+		const secret = await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const { userId, code } = await seedCode(MOODLE_REDIRECT, 'moodle');
+		const res = await postToken({
+			grant_type: 'authorization_code',
+			code,
+			redirect_uri: MOODLE_REDIRECT,
+			client_id: 'moodle',
+			client_secret: secret
+		});
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { access_token: string };
+		expect((await validateSession(db, body.access_token))?.cid).toBe(userId);
+	});
+
+	it('accepts the client secret via client_secret_basic', async () => {
+		const db = makeDb(env.DB);
+		const secret = await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const { code } = await seedCode(MOODLE_REDIRECT, 'moodle');
+		const res = await postToken(
+			{ grant_type: 'authorization_code', code, redirect_uri: MOODLE_REDIRECT },
+			basic('moodle', secret)
+		);
+		expect(res.status).toBe(200);
+	});
+
+	it('rejects a registered client without its secret', async () => {
+		const db = makeDb(env.DB);
+		await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const { code } = await seedCode(MOODLE_REDIRECT, 'moodle');
+		await expectInvalidClient(
+			await postToken({
+				grant_type: 'authorization_code',
+				code,
+				redirect_uri: MOODLE_REDIRECT,
+				client_id: 'moodle'
+			})
+		);
+		expect(await db.select().from(sessions).all()).toHaveLength(0);
+	});
+
+	it('rejects a registered client with a wrong secret', async () => {
+		const db = makeDb(env.DB);
+		await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
+		const { code } = await seedCode(MOODLE_REDIRECT, 'moodle');
+		await expectInvalidClient(
+			await postToken(
+				{ grant_type: 'authorization_code', code, redirect_uri: MOODLE_REDIRECT },
+				basic('moodle', 'wrong')
+			)
+		);
+	});
+
+	it('rejects a secret presented for an unregistered client_id', async () => {
+		const { code } = await seedCode();
+		await expectInvalidClient(
+			await postToken({
+				grant_type: 'authorization_code',
+				code,
+				redirect_uri: REDIRECT,
+				client_id: 'charts',
+				client_secret: 'anything'
+			})
+		);
+	});
+
+	it('rejects a code issued to another client', async () => {
+		const { code } = await seedCode(REDIRECT, 'charts');
+		await expectOAuthError(
+			await postToken({
+				grant_type: 'authorization_code',
+				code,
+				redirect_uri: REDIRECT,
+				client_id: 'other'
+			}),
+			'invalid_grant'
+		);
+	});
+
+	it("rejects client B's code redeemed with client A's valid credentials", async () => {
+		const db = makeDb(env.DB);
+		const secretA = await seedClient(db, 'a', { redirectUris: [MOODLE_REDIRECT] });
+		await seedClient(db, 'b', { redirectUris: [MOODLE_REDIRECT] });
+		const { code } = await seedCode(MOODLE_REDIRECT, 'b');
+		await expectOAuthError(
+			await postToken(
+				{ grant_type: 'authorization_code', code, redirect_uri: MOODLE_REDIRECT },
+				basic('a', secretA)
+			),
+			'invalid_grant'
+		);
+		expect(await db.select().from(sessions).all()).toHaveLength(0);
+	});
+
+	it('rejects a form client_id that differs from the Basic credentials', async () => {
+		const db = makeDb(env.DB);
+		const secretA = await seedClient(db, 'a', { redirectUris: [MOODLE_REDIRECT] });
+		const { code } = await seedCode(MOODLE_REDIRECT, 'b');
+		await expectOAuthError(
+			await postToken(
+				{ grant_type: 'authorization_code', code, redirect_uri: MOODLE_REDIRECT, client_id: 'b' },
+				basic('a', secretA)
+			),
+			'invalid_request'
+		);
 	});
 });
