@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { errorHandler } from './error-handler';
 import { loginRoutes, logoutRoutes } from './oauth/login-routes';
 import { oauthRoutes } from './oauth/routes';
+import { apiRoutes } from './users/routes';
 
 export function buildApp() {
 	const app = new Hono<{ Bindings: Cloudflare.Env }>();
@@ -11,5 +12,6 @@ export function buildApp() {
 	app.route('/oauth', oauthRoutes);
 	app.route('/login', loginRoutes);
 	app.route('/logout', logoutRoutes);
+	app.route('/api', apiRoutes);
 	return app;
 }

@@ -1,5 +1,5 @@
 // src/users/roles.ts
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { z } from 'zod';
 import type { DB } from '../db';
@@ -26,6 +26,34 @@ export async function listRoles(db: DB, cid: string): Promise<string[]> {
 		.where(eq(userRoles.cid, cid))
 		.all();
 	return rows.map((r) => r.role).sort();
+}
+
+// D1 binds at most 100 parameters per query.
+const MAX_BOUND_PARAMS = 100;
+
+/** listRoles for many users at once, keyed by cid (every cid present, possibly []). */
+export async function listRolesByCid(db: DB, cids: string[]): Promise<Map<string, string[]>> {
+	const byCid = new Map(cids.map((cid) => [cid, [] as string[]]));
+	const unique = [...byCid.keys()];
+	const chunks = Array.from({ length: Math.ceil(unique.length / MAX_BOUND_PARAMS) }, (_, i) =>
+		unique.slice(i * MAX_BOUND_PARAMS, (i + 1) * MAX_BOUND_PARAMS)
+	);
+	const results = await Promise.all(
+		chunks.map((chunk) =>
+			db
+				.selectDistinct({ cid: userRoles.cid, role: userRoles.role })
+				.from(userRoles)
+				.where(inArray(userRoles.cid, chunk))
+				.all()
+		)
+	);
+	for (const { cid, role } of results.flat()) {
+		byCid.get(cid)!.push(role);
+	}
+	for (const roles of byCid.values()) {
+		roles.sort();
+	}
+	return byCid;
 }
 
 export async function listRoleGrants(
