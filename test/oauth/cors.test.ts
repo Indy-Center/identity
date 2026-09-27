@@ -1,7 +1,7 @@
 import { exports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
-const USERINFO = 'https://auth.flyindycenter.com/oauth/userinfo';
+const USERINFO = 'https://id.flyindycenter.com/oauth/userinfo';
 
 describe('CORS on /oauth', () => {
 	it('reflects an allowed loopback origin, without credentials', async () => {
@@ -27,7 +27,7 @@ describe('CORS on /oauth', () => {
 	});
 
 	it('answers a preflight for an allowed origin', async () => {
-		const res = await exports.default.fetch('https://auth.flyindycenter.com/oauth/token', {
+		const res = await exports.default.fetch('https://id.flyindycenter.com/oauth/token', {
 			method: 'OPTIONS',
 			headers: {
 				Origin: 'http://localhost:5173',

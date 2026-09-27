@@ -6,7 +6,7 @@ import { authorizationCodes, users, sessions } from '../../src/schema';
 import { upsertFromVatsim, setUserActive } from '../../src/users/domain';
 import { validateSession } from '../../src/sessions/domain';
 
-const CALLBACK = 'https://auth.flyindycenter.com/login/callback?code=auth_code&state=state_xyz';
+const CALLBACK = 'https://id.flyindycenter.com/login/callback?code=auth_code&state=state_xyz';
 const REDIRECT = 'https://charts.flyindycenter.com/kind';
 
 beforeEach(async () => {
@@ -115,7 +115,7 @@ describe('GET /login/callback', () => {
 
 	it('400s with invalid_state when the state cookie is missing', async () => {
 		const res = await exports.default.fetch(
-			'https://auth.flyindycenter.com/login/callback?code=c&state=s',
+			'https://id.flyindycenter.com/login/callback?code=c&state=s',
 			{ redirect: 'manual' }
 		);
 		expect(res.status).toBe(400);
@@ -125,7 +125,7 @@ describe('GET /login/callback', () => {
 
 	it('400s when state mismatches', async () => {
 		const res = await exports.default.fetch(
-			'https://auth.flyindycenter.com/login/callback?code=c&state=mismatch',
+			'https://id.flyindycenter.com/login/callback?code=c&state=mismatch',
 			{ redirect: 'manual', headers: { Cookie: '__Host-oauth_state=different' } }
 		);
 		expect(res.status).toBe(400);

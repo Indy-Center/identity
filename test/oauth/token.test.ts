@@ -9,7 +9,7 @@ import { createAuthorizationCode } from '../../src/authorization-codes/domain';
 import { sha256Hex } from '../../src/crypto';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
-const TOKEN_URL = 'https://auth.flyindycenter.com/oauth/token';
+const TOKEN_URL = 'https://id.flyindycenter.com/oauth/token';
 const REDIRECT = 'http://localhost:5173/kind';
 
 beforeEach(async () => {

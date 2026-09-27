@@ -9,7 +9,7 @@ import { makeVatsimProfile } from '../helpers/fixtures';
 const REDIRECT = 'https://charts.flyindycenter.com/kind?tab=charts';
 
 function authorizeUrl(params: Record<string, string>): string {
-	return `https://auth.flyindycenter.com/oauth/authorize?${new URLSearchParams(params)}`;
+	return `https://id.flyindycenter.com/oauth/authorize?${new URLSearchParams(params)}`;
 }
 
 const VALID = { response_type: 'code', client_id: 'charts', redirect_uri: REDIRECT };

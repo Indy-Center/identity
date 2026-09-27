@@ -10,8 +10,7 @@ import { IdentityError } from '../errors';
 import { buildAuthorizationUrl } from '../auth/oauth';
 import { validateSession } from '../sessions/domain';
 import { createAuthorizationCode, exchangeAuthorizationCode } from '../authorization-codes/domain';
-import { getSessionContext, logout } from '../sessions/context';
-import { serializeUserinfo } from '../sessions/context';
+import { getSessionContext, logout, serializeUserinfo } from '../sessions/context';
 import { buildRedirectWithCode, isAllowedOrigin, isAllowedRedirectUri } from './redirect-uri';
 import { clearLegacySessionCookie } from '../auth/legacy-cookie';
 

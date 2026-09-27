@@ -8,7 +8,7 @@ import { __resetCacheForTests } from '../../src/online-controllers/domain';
 import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/flight-plans/domain';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
-const USERINFO = 'https://auth.flyindycenter.com/oauth/userinfo';
+const USERINFO = 'https://id.flyindycenter.com/oauth/userinfo';
 
 beforeEach(async () => {
 	const db = makeDb(env.DB);

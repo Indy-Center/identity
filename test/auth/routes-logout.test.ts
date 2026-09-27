@@ -8,7 +8,7 @@ import { createSession } from '../../src/sessions/domain';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
 const LOGOUT =
-	'https://auth.flyindycenter.com/logout?return_url=' +
+	'https://id.flyindycenter.com/logout?return_url=' +
 	encodeURIComponent('https://charts.flyindycenter.com/');
 
 beforeEach(async () => {
@@ -64,7 +64,7 @@ describe('GET /logout', () => {
 
 	it('accepts a loopback return_url', async () => {
 		const res = await exports.default.fetch(
-			'https://auth.flyindycenter.com/logout?return_url=' +
+			'https://id.flyindycenter.com/logout?return_url=' +
 				encodeURIComponent('http://localhost:5173/'),
 			{ redirect: 'manual' }
 		);
@@ -74,11 +74,11 @@ describe('GET /logout', () => {
 
 	it('400s for an off-domain or missing return_url', async () => {
 		const offDomain = await exports.default.fetch(
-			'https://auth.flyindycenter.com/logout?return_url=https://evil.com/',
+			'https://id.flyindycenter.com/logout?return_url=https://evil.com/',
 			{ redirect: 'manual' }
 		);
 		expect(offDomain.status).toBe(400);
-		const missing = await exports.default.fetch('https://auth.flyindycenter.com/logout', {
+		const missing = await exports.default.fetch('https://id.flyindycenter.com/logout', {
 			redirect: 'manual'
 		});
 		expect(missing.status).toBe(400);

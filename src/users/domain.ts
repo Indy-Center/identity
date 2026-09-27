@@ -1,10 +1,9 @@
 import { eq, sql } from 'drizzle-orm';
-import { sessions, users, userRoles } from '../schema';
+import { sessions, users, userRoles, type User } from '../schema';
 import type { DB } from '../db';
 import type { AttributePatch } from './attributes';
 import { AttributePatchSchema } from './attributes-schema';
 import { IdentityError } from '../errors';
-import type { User } from '../schema';
 import type { VatsimProfile } from '../auth/vatsim-schema';
 
 export async function upsertFromVatsim(db: DB, profile: VatsimProfile): Promise<User> {
