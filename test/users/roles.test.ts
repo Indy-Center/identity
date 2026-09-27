@@ -75,6 +75,15 @@ describe('patchRoles', () => {
 		});
 		await patchRoles(db(), '1', 'c', { remove: ['feedback_x:*'] });
 		expect(await listRoles(db(), '1')).toEqual(['community:admin', 'feedbackx:full']);
+		// Under LIKE, `a_b:%` would match `axb:one`; a prefix match must not.
+		await patchRoles(db(), '1', 'c', { add: ['axb:one'] });
+		await patchRoles(db(), '1', 'c', { remove: ['a_b:*'] });
+		expect(await listRoles(db(), '1')).toContain('axb:one');
+	});
+
+	it('adds more roles in one patch than one query could bind', async () => {
+		const many = Array.from({ length: 30 }, (_, i) => `bulk:r${String(i).padStart(2, '0')}`);
+		expect(await patchRoles(db(), '1', 'c', { add: many })).toEqual(many);
 	});
 
 	it('is idempotent', async () => {

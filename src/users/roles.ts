@@ -75,15 +75,13 @@ export async function patchRoles(
 	const statements: BatchItem<'sqlite'>[] = remove.map((pattern) =>
 		db.delete(userRoles).where(and(owned, removeCondition(pattern)))
 	);
-	if (add.length > 0) {
-		const now = Date.now();
-		statements.push(
-			db
-				.insert(userRoles)
-				.values(add.map((role) => ({ cid, role, source, grantedAt: now })))
-				.onConflictDoNothing()
-		);
-	}
+	// One insert per role: D1 caps bound parameters at 100 per query.
+	const now = Date.now();
+	statements.push(
+		...add.map((role) =>
+			db.insert(userRoles).values({ cid, role, source, grantedAt: now }).onConflictDoNothing()
+		)
+	);
 	if (statements.length > 0) {
 		await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 	}
