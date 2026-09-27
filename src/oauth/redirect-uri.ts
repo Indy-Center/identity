@@ -2,21 +2,21 @@
 import type { DB } from '../db';
 import { IdentityError } from '../errors';
 import { findClient } from '../clients/domain';
+import { LOOPBACK, REDIRECT_URI_MAX_LENGTH } from './redirect-uri-rules';
+
+export { REDIRECT_URI_MAX_LENGTH };
 
 // Where identity may send a browser: https on flyindycenter.com or one level
-// of subdomain, or http on a loopback host (RFC 8252 §7.3) at any port. Both
-// patterns end in (\/[^\s]*)?$, so a bare origin (scheme://host[:port]) matches
-// the same rules as a full URL; that is what lets CORS reuse them. The trailing
+// of subdomain, or http on a loopback host (LOOPBACK, in redirect-uri-rules.ts)
+// at any port. Both patterns end in (\/[^\s]*)?$, so a bare origin
+// (scheme://host[:port]) matches the same rules as a full URL; that is what lets CORS reuse them. The trailing
 // $ anchors the whole string so nothing after the host — including a raw CR/LF
 // or other control character bound for a Location header — can slip through.
 const PRODUCTION = /^https:\/\/([a-z0-9-]+\.)?flyindycenter\.com(\/[^\s]*)?$/;
-const LOOPBACK = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/[^\s]*)?$/;
 
 export function isAllowedRedirectUri(url: string): boolean {
 	return PRODUCTION.test(url) || LOOPBACK.test(url);
 }
-
-export const REDIRECT_URI_MAX_LENGTH = 2048;
 
 /**
  * Whether identity may send `clientId`'s authorization code to `uri`. A

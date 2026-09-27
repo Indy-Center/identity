@@ -1,13 +1,13 @@
 // test/scripts/manage-sql.test.ts
 import { describe, expect, it } from 'vitest';
 import { sha256Hex } from '../../src/crypto';
-import { RoleNameSchema } from '../../src/users/roles';
 import {
 	createClientSql,
 	deleteClientSql,
 	generateClientSecret,
 	grantRoleSql,
 	hashSecret,
+	returnedRowCount,
 	revokeRoleSql,
 	rotateClientSql,
 	sqlString
@@ -42,8 +42,58 @@ describe('manage-sql', () => {
 			`INSERT INTO clients (id, secret_hash, redirect_uris, scopes, created_at) VALUES ('moodle', '${await sha256Hex('moodle_s')}', '["https://m.example.org/cb"]', '["users:read"]', 5);`
 		);
 		expect(
-			await createClientSql({ id: 'bot', secret: 'b', scopes: [], redirectUris: [], now: 1 })
-		).toContain("NULL, '[]', 1);");
+			await createClientSql({
+				id: 'bot',
+				secret: 'b',
+				scopes: ['users:read'],
+				redirectUris: [],
+				now: 1
+			})
+		).toContain(`NULL, '["users:read"]', 1);`);
+		expect(
+			await createClientSql({
+				id: 'app',
+				secret: 'a',
+				scopes: [],
+				redirectUris: ['http://localhost:5173/cb'],
+				now: 1
+			})
+		).toContain(`'["http://localhost:5173/cb"]', '[]', 1);`);
+	});
+
+	it('refuses a client with neither scopes nor redirect URIs', async () => {
+		await expect(
+			createClientSql({ id: 'bot', secret: 'b', scopes: [], redirectUris: [], now: 1 })
+		).rejects.toThrow(/at least one --scope or --redirect-uri/);
+	});
+
+	it('validates redirect URIs', async () => {
+		const create = (uri: string) =>
+			createClientSql({ id: 'x', secret: 's', scopes: [], redirectUris: [uri], now: 1 });
+		for (const ok of [
+			'https://moodle.example.org/cb',
+			'https://m.example.org/cb?x=1',
+			'http://localhost/cb',
+			'http://127.0.0.1:8080/cb',
+			'http://[::1]:3000/cb'
+		]) {
+			await expect(create(ok), ok).resolves.toContain('INSERT INTO clients');
+		}
+		for (const bad of [
+			'http://moodle.example.org/cb',
+			'http://localhost.evil.org/cb',
+			'https:moodle.example.org/cb',
+			'javascript:alert(1)',
+			'/relative/cb',
+			'https://m.example.org/cb#frag',
+			'https://m.example.org/c b',
+			'https://m.example.org/cb\r\nSet-Cookie: x',
+			'https://m.example.org/\u0000',
+			'https://user:pw@m.example.org/cb',
+			`https://m.example.org/${'a'.repeat(2048)}`
+		]) {
+			await expect(create(bad), bad).rejects.toThrow(/redirect uri/);
+		}
 	});
 
 	it('escapes quotes inside redirect URIs', async () => {
@@ -87,49 +137,45 @@ describe('manage-sql', () => {
 	it('rotate replaces the hash and kills tokens; delete removes both', async () => {
 		const rotate = await rotateClientSql('bot', 'bot_new');
 		expect(rotate).toContain(
-			`UPDATE clients SET secret_hash = '${await sha256Hex('bot_new')}' WHERE id = 'bot';`
+			`UPDATE clients SET secret_hash = '${await sha256Hex('bot_new')}' WHERE id = 'bot' RETURNING id;`
 		);
 		expect(rotate).toContain("DELETE FROM client_tokens WHERE client_id = 'bot';");
 		expect(deleteClientSql('bot')).toBe(
-			"DELETE FROM client_tokens WHERE client_id = 'bot'; DELETE FROM clients WHERE id = 'bot';"
+			"DELETE FROM client_tokens WHERE client_id = 'bot'; DELETE FROM clients WHERE id = 'bot' RETURNING id;"
 		);
 	});
 
 	it('grants and revokes cli-sourced roles', () => {
 		expect(grantRoleSql('1234567', 'global:admin', 9)).toBe(
-			"INSERT INTO user_roles (cid, role, source, granted_at) VALUES ('1234567', 'global:admin', 'cli', 9) ON CONFLICT DO NOTHING;"
+			"INSERT INTO user_roles (cid, role, source, granted_at) VALUES ('1234567', 'global:admin', 'cli', 9) ON CONFLICT DO NOTHING RETURNING cid;"
 		);
 		expect(revokeRoleSql('1234567', 'global:admin')).toBe(
-			"DELETE FROM user_roles WHERE cid = '1234567' AND role = 'global:admin' AND source = 'cli';"
+			"DELETE FROM user_roles WHERE cid = '1234567' AND role = 'global:admin' AND source = 'cli' RETURNING cid;"
 		);
-		expect(() => grantRoleSql('abc', 'global:admin', 1)).toThrow(/cid/);
+		for (const cid of ['abc', '0', '01', '', '12345678901', '-1', '1.5']) {
+			expect(() => grantRoleSql(cid, 'global:admin', 1), cid).toThrow(/cid/);
+			expect(() => revokeRoleSql(cid, 'global:admin'), cid).toThrow(/cid/);
+		}
 		expect(() => grantRoleSql('1', 'admin', 1)).toThrow(/role/);
 		expect(() => grantRoleSql("1' OR '1'='1", 'global:admin', 1)).toThrow(/cid/);
 		expect(() => revokeRoleSql('1', "global:admin' OR '1'='1")).toThrow(/role/);
 		expect(() => grantRoleSql('1', 'global:admin', Number.NaN)).toThrow(/timestamp/);
 	});
 
-	it('accepts exactly the role names the API accepts', () => {
-		const samples = [
-			'global:admin',
-			'events:can_sign_up',
-			'a-b:c.d',
-			'admin',
-			'Global:admin',
-			'a:b:c',
-			'a:*',
-			"a:b'",
-			'a :b',
-			':b',
-			'a:'
-		];
-		for (const role of samples) {
-			const api = RoleNameSchema.safeParse(role).success;
-			if (api) {
-				expect(() => grantRoleSql('1', role, 1)).not.toThrow();
-			} else {
-				expect(() => grantRoleSql('1', role, 1)).toThrow(/role/);
-			}
-		}
+	it('counts rows returned in wrangler --json output', () => {
+		const out = (...counts: number[]) =>
+			JSON.stringify(
+				counts.map((n) => ({
+					results: Array.from({ length: n }, () => ({ id: 'bot' })),
+					success: true,
+					meta: { duration: 0 }
+				}))
+			);
+		expect(returnedRowCount(out(1, 0))).toBe(1);
+		expect(returnedRowCount(out(0, 0))).toBe(0);
+		expect(returnedRowCount(out(0))).toBe(0);
+		expect(() => returnedRowCount('{}')).toThrow(/unexpected/);
+		expect(() => returnedRowCount('[{}]')).toThrow(/unexpected/);
+		expect(() => returnedRowCount('not json')).toThrow();
 	});
 });

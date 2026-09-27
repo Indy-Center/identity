@@ -177,7 +177,7 @@ apiRoutes.patch(
 		security: bearer,
 		summary: "Add/remove the caller's own role grants (users:write)",
 		description:
-			'remove runs before add. remove accepts `*` and `app:*` (caller rows only). global:* cannot be added.',
+			'remove runs before add. remove accepts `*` and `app:*` (caller rows only). global:* cannot be added or removed.',
 		responses: {
 			200: ok('The full set of roles after the patch', z.object({ roles: z.array(z.string()) })),
 			...errors(401, 403)

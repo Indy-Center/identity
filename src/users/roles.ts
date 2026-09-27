@@ -5,9 +5,10 @@ import { z } from 'zod';
 import type { DB } from '../db';
 import { userRoles } from '../schema';
 import { IdentityError } from '../errors';
+import { ROLE_NAME } from './role-name';
 
-// `app:permission`, e.g. events:can_sign_up. The prefix keeps apps' names apart.
-export const RoleNameSchema = z.string().regex(/^[a-z0-9_-]+:[a-z0-9_.-]+$/);
+// `app:permission`, e.g. events:can_sign_up (pattern in role-name.ts).
+export const RoleNameSchema = z.string().regex(ROLE_NAME);
 
 // remove also accepts `*` (everything the caller granted) or `app:*` (a namespace).
 export const RoleRemovePatternSchema = z.union([
@@ -78,10 +79,10 @@ function removeCondition(pattern: string) {
 /**
  * Apply a patch to the roles `source` owns for `cid`: every `remove` pattern
  * first, then every `add`, in one atomic `db.batch`. Rows owned by other sources are
- * never touched. `global:*` roles are granted and revoked only by the CLI, never
- * here: naming them in `add` or `remove` is refused outright, even though the
- * source scoping alone would already keep API callers off `cli` rows. A bare `*`
- * stays allowed, because it only reaches the caller's own rows.
+ * never touched. `global:*` roles are added and removed only by the CLI (which
+ * writes SQL directly), never here: naming them in `add` or `remove` is refused
+ * for every source. A bare `*` stays allowed, because it only reaches the
+ * caller's own rows.
  */
 export async function patchRoles(
 	db: DB,
@@ -91,11 +92,11 @@ export async function patchRoles(
 ): Promise<string[]> {
 	const add = patch.add ?? [];
 	const remove = patch.remove ?? [];
-	if (source !== 'cli' && [...add, ...remove].some((r) => r.startsWith('global:'))) {
+	if ([...add, ...remove].some((r) => r.startsWith('global:'))) {
 		throw new IdentityError(
 			'insufficient_scope',
 			403,
-			'global:* roles cannot be granted or revoked via the API'
+			'global:* roles cannot be added or removed via the API'
 		);
 	}
 	const owned = and(eq(userRoles.cid, cid), eq(userRoles.source, source));

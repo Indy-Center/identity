@@ -1,7 +1,7 @@
 // scripts/manage.ts
 // npm run client -- create <id> [--scope users:read] [--scope users:write] [--redirect-uri <url>]… [--local]
 // npm run client -- rotate <id> [--local]
-// npm run client -- delete <id> [--local]
+// npm run client -- delete <id> [--local | --yes]
 // npm run client -- list [--local]
 // npm run role   -- grant|revoke <cid> <role> [--local]
 //
@@ -16,6 +16,7 @@ import {
 	deleteClientSql,
 	generateClientSecret,
 	grantRoleSql,
+	returnedRowCount,
 	revokeRoleSql,
 	rotateClientSql
 } from './manage-sql.ts';
@@ -23,35 +24,29 @@ import {
 const USAGE = `usage:
   npm run client -- create <id> [--scope users:read|users:write]… [--redirect-uri <url>]… [--local]
   npm run client -- rotate <id> [--local]
-  npm run client -- delete <id> [--local]
+  npm run client -- delete <id> [--local | --yes]
   npm run client -- list [--local]
   npm run role   -- grant <cid> <role> [--local]
-  npm run role   -- revoke <cid> <role> [--local]`;
+  npm run role   -- revoke <cid> <role> [--local]
 
-const { values, positionals } = parseArgs({
-	allowPositionals: true,
-	options: {
-		scope: { type: 'string', multiple: true, default: [] },
-		'redirect-uri': { type: 'string', multiple: true, default: [] },
-		local: { type: 'boolean', default: false },
-		help: { type: 'boolean', short: 'h', default: false }
-	}
-});
+Targets the REMOTE id_db unless --local is given. A remote delete needs --yes.`;
 
-function d1(sql: string, json = false): void {
-	execFileSync(
+class UsageError extends Error {}
+
+function d1(sql: string, local: boolean): string {
+	return execFileSync(
 		'npx',
 		[
 			'wrangler',
 			'd1',
 			'execute',
 			'id_db',
-			values.local ? '--local' : '--remote',
+			local ? '--local' : '--remote',
 			'--command',
 			sql,
-			...(json ? ['--json'] : [])
+			'--json'
 		],
-		{ stdio: 'inherit' }
+		{ encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] }
 	);
 }
 
@@ -62,22 +57,42 @@ function printSecret(id: string, secret: string): void {
 }
 
 async function main(): Promise<void> {
+	let parsed;
+	try {
+		parsed = parseArgs({
+			allowPositionals: true,
+			options: {
+				scope: { type: 'string', multiple: true, default: [] },
+				'redirect-uri': { type: 'string', multiple: true, default: [] },
+				local: { type: 'boolean', default: false },
+				yes: { type: 'boolean', default: false },
+				help: { type: 'boolean', short: 'h', default: false }
+			}
+		});
+	} catch (err) {
+		throw new UsageError(err instanceof Error ? err.message : String(err));
+	}
+	const { values, positionals } = parsed;
 	const [kind, action, ...args] = positionals;
 	if (values.help || !kind || !action) {
 		console.log(USAGE);
 		return;
 	}
+	const run = (sql: string) => d1(sql, values.local);
+	const where = values.local ? 'local' : 'REMOTE';
+
 	if (kind === 'client') {
 		const id = args[0];
 		if (action === 'list') {
-			return d1(LIST_CLIENTS_SQL, true);
+			console.log(run(LIST_CLIENTS_SQL));
+			return;
 		}
 		if (!id) {
-			throw new Error(USAGE);
+			throw new UsageError(`missing <id>`);
 		}
 		if (action === 'create') {
 			const secret = generateClientSecret(id);
-			d1(
+			run(
 				await createClientSql({
 					id,
 					secret,
@@ -90,29 +105,55 @@ async function main(): Promise<void> {
 		}
 		if (action === 'rotate') {
 			const secret = generateClientSecret(id);
-			d1(await rotateClientSql(id, secret));
+			const changed = returnedRowCount(run(await rotateClientSql(id, secret)));
+			if (changed !== 1) {
+				throw new Error(`no client "${id}" in ${where} id_db; nothing rotated`);
+			}
 			return printSecret(id, secret);
 		}
 		if (action === 'delete') {
-			return d1(deleteClientSql(id));
+			const sql = deleteClientSql(id);
+			if (!values.local && !values.yes) {
+				throw new Error(
+					`would delete client "${id}" and all its tokens from REMOTE id_db:\n  ${sql}\nre-run with --yes to do it`
+				);
+			}
+			if (returnedRowCount(run(sql)) !== 1) {
+				throw new Error(`no client "${id}" in ${where} id_db; nothing deleted`);
+			}
+			console.log(`deleted client "${id}" from ${where} id_db`);
+			return;
 		}
 	}
 	if (kind === 'role') {
 		const [cid, role] = args;
 		if (!cid || !role) {
-			throw new Error(USAGE);
+			throw new UsageError('missing <cid> or <role>');
 		}
 		if (action === 'grant') {
-			return d1(grantRoleSql(cid, role, Date.now()));
+			const added = returnedRowCount(run(grantRoleSql(cid, role, Date.now())));
+			console.log(
+				added === 1
+					? `granted ${role} to ${cid} in ${where} id_db`
+					: `${cid} already had a cli grant of ${role} in ${where} id_db`
+			);
+			return;
 		}
 		if (action === 'revoke') {
-			return d1(revokeRoleSql(cid, role));
+			if (returnedRowCount(run(revokeRoleSql(cid, role))) !== 1) {
+				throw new Error(`${cid} has no cli grant of ${role} in ${where} id_db; nothing revoked`);
+			}
+			console.log(`revoked ${role} from ${cid} in ${where} id_db`);
+			return;
 		}
 	}
-	throw new Error(USAGE);
+	throw new UsageError(`unknown command "${kind} ${action}"`);
 }
 
 main().catch((err: unknown) => {
 	console.error(err instanceof Error ? err.message : err);
+	if (err instanceof UsageError) {
+		console.error(`\n${USAGE}`);
+	}
 	process.exit(1);
 });

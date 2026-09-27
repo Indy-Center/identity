@@ -105,15 +105,21 @@ describe('patchRoles', () => {
 		expect(await listRoles(db(), '1')).toEqual(['global:admin']);
 	});
 
-	it('refuses to remove global roles by name or namespace', async () => {
+	it('refuses global roles for every source, even one named cli', async () => {
 		await db()
 			.insert(userRoles)
 			.values({ cid: '1', role: 'global:admin', source: 'cli', grantedAt: 1 });
-		for (const pattern of ['global:*', 'global:admin']) {
-			await expect(patchRoles(db(), '1', 'user:2', { remove: [pattern] })).rejects.toMatchObject({
-				code: 'insufficient_scope',
-				status: 403
-			});
+		for (const source of ['user:2', 'cli']) {
+			for (const patch of [
+				{ remove: ['global:*'] },
+				{ remove: ['global:admin'] },
+				{ add: ['global:admin'] }
+			]) {
+				await expect(patchRoles(db(), '1', source, patch)).rejects.toMatchObject({
+					code: 'insufficient_scope',
+					status: 403
+				});
+			}
 		}
 		expect(await listRoleGrants(db(), '1')).toEqual([{ role: 'global:admin', source: 'cli' }]);
 	});
