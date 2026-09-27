@@ -7,12 +7,12 @@ import { z } from 'zod';
 import { makeDb } from '../db';
 import { randomBase32 } from '../crypto';
 import { IdentityError } from '../errors';
-import { buildAuthorizationUrl } from '../auth/oauth';
+import { buildAuthorizationUrl } from './vatsim';
 import { validateSession } from '../sessions/domain';
-import { createAuthorizationCode, exchangeAuthorizationCode } from '../authorization-codes/domain';
+import { createAuthorizationCode, exchangeAuthorizationCode } from './codes';
 import { getSessionContext, logout, serializeUserinfo } from '../sessions/context';
 import { buildRedirectWithCode, isAllowedOrigin, isAllowedRedirectUri } from './redirect-uri';
-import { clearLegacySessionCookie } from '../auth/legacy-cookie';
+import { clearLegacySessionCookie } from './legacy-cookie';
 
 type Env = { Bindings: Cloudflare.Env };
 

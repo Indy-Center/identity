@@ -1,4 +1,4 @@
-// src/authorization-codes/domain.ts
+// src/oauth/codes.ts
 import { eq, lt } from 'drizzle-orm';
 import type { DB } from '../db';
 import { authorizationCodes, users } from '../schema';

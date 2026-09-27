@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 import type { Attributes } from './users/attributes';
-import type { VatsimProfile } from './auth/vatsim-schema';
+import type { VatsimProfile } from './oauth/vatsim';
 
 export const users = sqliteTable(
 	'users',

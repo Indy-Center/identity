@@ -1,4 +1,4 @@
-// src/online-controllers/schema.ts
+// presence/schema.ts
 import { z } from 'zod';
 
 // vNAS controllers feed shape. Mirrors the publicly observable response at

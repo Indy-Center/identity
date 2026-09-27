@@ -1,4 +1,4 @@
-// src/online-controllers/types.ts
+// presence/types.ts
 import type { z } from 'zod';
 import type {
 	OnlineControllerSchema,

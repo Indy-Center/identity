@@ -1,12 +1,12 @@
-// test/online-controllers/domain.test.ts
+// test/incubator/presence/domain.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	__resetCacheForTests,
 	ensureFresh,
 	getActiveSession,
 	listByArtcc
-} from '../../src/online-controllers/domain';
-import type { OnlineController } from '../../src/online-controllers/types';
+} from '../../../src/incubator/presence/domain';
+import type { OnlineController } from '../../../src/incubator/presence/types';
 
 function makeController(overrides: Partial<OnlineController> = {}): OnlineController {
 	return {

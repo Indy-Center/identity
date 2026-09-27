@@ -1,4 +1,4 @@
-// test/auth/routes-logout.test.ts
+// test/oauth/logout.test.ts
 import { env, exports } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDb } from '../../src/db';

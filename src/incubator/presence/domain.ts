@@ -1,4 +1,4 @@
-// src/online-controllers/domain.ts
+// presence/domain.ts
 import { VnasControllerResponseSchema } from './schema';
 import type { OnlineController } from './types';
 

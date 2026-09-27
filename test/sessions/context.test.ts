@@ -6,10 +6,10 @@ import { upsertFromVatsim } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
 import { getSessionContext, logout } from '../../src/sessions/context';
 import { makeVatsimProfile } from '../helpers/fixtures';
-import { __resetCacheForTests } from '../../src/online-controllers/domain';
-import type { OnlineController } from '../../src/online-controllers/types';
-import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/flight-plans/domain';
-import type { FlightPlan } from '../../src/flight-plans/types';
+import { __resetCacheForTests } from '../../src/incubator/presence/domain';
+import type { OnlineController } from '../../src/incubator/presence/types';
+import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/incubator/flight-plans/domain';
+import type { FlightPlan } from '../../src/incubator/flight-plans/types';
 
 beforeEach(async () => {
 	const db = makeDb(env.DB);

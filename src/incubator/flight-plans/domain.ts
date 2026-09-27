@@ -1,4 +1,4 @@
-// src/flight-plans/domain.ts
+// flight-plans/domain.ts
 import { VatsimDataFeedSchema } from './schema';
 import type { FlightPlan } from './types';
 

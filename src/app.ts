@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { errorHandler } from './error-handler';
-import { loginRoutes, logoutRoutes } from './auth/routes';
+import { loginRoutes, logoutRoutes } from './oauth/login-routes';
 import { oauthRoutes } from './oauth/routes';
 
 export function buildApp() {

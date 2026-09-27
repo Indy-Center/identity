@@ -1,4 +1,4 @@
-// src/flight-plans/types.ts
+// flight-plans/types.ts
 import type { z } from 'zod';
 import type { FlightPlanSchema, PilotSchema, VatsimDataFeedSchema } from './schema';
 

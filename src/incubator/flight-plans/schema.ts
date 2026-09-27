@@ -1,4 +1,4 @@
-// src/flight-plans/schema.ts
+// flight-plans/schema.ts
 import { z } from 'zod';
 
 // Subset of the public VATSIM datafeed (https://data.vatsim.net/v3/vatsim-data.json)

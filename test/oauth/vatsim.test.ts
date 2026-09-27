@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchVatsimProfile } from '../../src/auth/vatsim';
+import { fetchVatsimProfile } from '../../src/oauth/vatsim';
 
 describe('fetchVatsimProfile', () => {
 	beforeEach(() => {

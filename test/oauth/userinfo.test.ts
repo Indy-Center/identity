@@ -4,8 +4,8 @@ import { makeDb } from '../../src/db';
 import { sessions, userRoles, users } from '../../src/schema';
 import { upsertFromVatsim } from '../../src/users/domain';
 import { createSession } from '../../src/sessions/domain';
-import { __resetCacheForTests } from '../../src/online-controllers/domain';
-import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/flight-plans/domain';
+import { __resetCacheForTests } from '../../src/incubator/presence/domain';
+import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/incubator/flight-plans/domain';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
 const USERINFO = 'https://id.flyindycenter.com/oauth/userinfo';

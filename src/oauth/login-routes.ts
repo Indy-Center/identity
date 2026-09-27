@@ -2,17 +2,12 @@ import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { makeDb } from '../db';
-import { exchangeCodeForToken } from './oauth';
+import { exchangeCodeForToken, fetchVatsimProfile } from './vatsim';
 import { createSession, deleteAllSessionsForUser, findSessionByToken } from '../sessions/domain';
 import { upsertFromVatsim } from '../users/domain';
-import { fetchVatsimProfile } from './vatsim';
 import { IdentityError } from '../errors';
-import { createAuthorizationCode } from '../authorization-codes/domain';
-import {
-	buildRedirectWithCode,
-	isAllowedRedirectUri,
-	validateReturnUrl
-} from '../oauth/redirect-uri';
+import { createAuthorizationCode } from './codes';
+import { buildRedirectWithCode, isAllowedRedirectUri, validateReturnUrl } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
 
 // Only /login/callback lives here: it is the redirect URI registered with

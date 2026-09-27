@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDb } from '../../src/db';
 import { users, userRoles } from '../../src/schema';
 import { upsertFromVatsim } from '../../src/users/domain';
-import { add, remove, set, get } from '../../src/roles/domain';
+import { add, remove, set, get } from '../../src/users/roles';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
 beforeEach(async () => {

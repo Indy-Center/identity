@@ -4,12 +4,12 @@
 import { makeDb } from '../db';
 import * as users from '../users/domain';
 import * as sessions from './domain';
-import * as roles from '../roles/domain';
-import * as onlineControllers from '../online-controllers/domain';
-import * as flightPlans from '../flight-plans/domain';
+import * as roles from '../users/roles';
+import * as onlineControllers from '../incubator/presence/domain';
+import * as flightPlans from '../incubator/flight-plans/domain';
 import type { User } from '../schema';
-import type { OnlineController } from '../online-controllers/types';
-import type { FlightPlan } from '../flight-plans/types';
+import type { OnlineController } from '../incubator/presence/types';
+import type { FlightPlan } from '../incubator/flight-plans/types';
 
 export type SessionContext = {
 	user: User;

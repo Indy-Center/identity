@@ -8,7 +8,7 @@ import {
 	AUTHORIZATION_CODE_LIFETIME_MS,
 	createAuthorizationCode,
 	exchangeAuthorizationCode
-} from '../../src/authorization-codes/domain';
+} from '../../src/oauth/codes';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
 const REDIRECT = 'https://charts.flyindycenter.com/kind';

@@ -4,7 +4,7 @@ import type { DB } from '../db';
 import type { AttributePatch } from './attributes';
 import { AttributePatchSchema } from './attributes-schema';
 import { IdentityError } from '../errors';
-import type { VatsimProfile } from '../auth/vatsim-schema';
+import type { VatsimProfile } from '../oauth/vatsim';
 
 export async function upsertFromVatsim(db: DB, profile: VatsimProfile): Promise<User> {
 	const now = Date.now();

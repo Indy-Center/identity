@@ -5,7 +5,7 @@ import { makeDb } from '../../src/db';
 import { authorizationCodes, sessions, users } from '../../src/schema';
 import { setUserActive, upsertFromVatsim } from '../../src/users/domain';
 import { validateSession } from '../../src/sessions/domain';
-import { createAuthorizationCode } from '../../src/authorization-codes/domain';
+import { createAuthorizationCode } from '../../src/oauth/codes';
 import { sha256Hex } from '../../src/crypto';
 import { makeVatsimProfile } from '../helpers/fixtures';
 

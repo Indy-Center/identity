@@ -1,7 +1,11 @@
-// test/flight-plans/domain.test.ts
+// test/incubator/flight-plans/domain.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __resetCacheForTests, ensureFresh, getFlightPlan } from '../../src/flight-plans/domain';
-import type { Pilot, FlightPlan } from '../../src/flight-plans/types';
+import {
+	__resetCacheForTests,
+	ensureFresh,
+	getFlightPlan
+} from '../../../src/incubator/flight-plans/domain';
+import type { Pilot, FlightPlan } from '../../../src/incubator/flight-plans/types';
 
 function makeFlightPlan(overrides: Partial<FlightPlan> = {}): FlightPlan {
 	return {
