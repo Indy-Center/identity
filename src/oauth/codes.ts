@@ -41,7 +41,9 @@ export async function exchangeAuthorizationCode(
 	clientId: string
 ): Promise<{ token: string; expiresAt: number; cid: string } | null> {
 	const now = Date.now();
+	// Opportunistic cleanup; there is no cron.
 	await db.delete(authorizationCodes).where(lt(authorizationCodes.expiresAt, now));
+	// DELETE … RETURNING makes the consume atomic: only one caller gets the row.
 	const [row] = await db
 		.delete(authorizationCodes)
 		.where(eq(authorizationCodes.id, await sha256Hex(code)))

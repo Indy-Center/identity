@@ -131,5 +131,6 @@ describe('setUserActive', () => {
 		const enabled = await setUserActive(db(), '1', true);
 		expect(enabled).toMatchObject({ active: true, disabledReason: null, disabledAt: null });
 		expect((await getUser(db(), '1'))?.active).toBe(true);
+		await expect(setUserActive(db(), 'nope', false)).rejects.toMatchObject({ status: 404 });
 	});
 });

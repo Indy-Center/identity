@@ -1,5 +1,5 @@
 // src/users/domain.ts
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { sessions, userRoles, users, type User } from '../schema';
 import type { DB } from '../db';
 import type { VatsimProfile } from '../oauth/vatsim';
@@ -65,8 +65,8 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 export async function updateProfile(db: DB, cid: string, patch: ProfilePatch): Promise<User> {
-	const set = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
-	if (Object.keys(set).length === 0) {
+	// Drizzle's .set() skips undefined values; only an all-undefined patch needs handling.
+	if (Object.values(patch).every((v) => v === undefined)) {
 		const user = await getUser(db, cid);
 		if (!user) {
 			throw new IdentityError('not_found', 404, `user ${cid} not found`);
@@ -76,7 +76,7 @@ export async function updateProfile(db: DB, cid: string, patch: ProfilePatch): P
 	try {
 		const [row] = await db
 			.update(users)
-			.set({ ...set, updatedAt: Date.now() })
+			.set({ ...patch, updatedAt: Date.now() })
 			.where(eq(users.cid, cid))
 			.returning();
 		if (!row) {
@@ -107,7 +107,7 @@ export async function setUserActive(
 		)
 		.where(eq(users.cid, cid))
 		.returning();
-	// Disabling revokes every session in the same transaction.
+	// Disabling revokes every session in one atomic batch.
 	const [rows] = active
 		? [await update]
 		: await db.batch([update, db.delete(sessions).where(eq(sessions.cid, cid))]);
