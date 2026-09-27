@@ -70,6 +70,7 @@ describe('findSessionByToken', () => {
 describe('validateSession', () => {
 	const LIFETIME = 30 * 24 * 60 * 60 * 1000;
 	const REFRESH = 15 * 24 * 60 * 60 * 1000;
+	const HOUR = 60 * 60 * 1000;
 
 	it('returns null and deletes the row when expired', async () => {
 		const db = makeDb(env.DB);
@@ -91,16 +92,28 @@ describe('validateSession', () => {
 		expect(result).toBeNull();
 	});
 
-	it('returns the session row for a valid token and updates last_seen_at', async () => {
+	it('does not rewrite last_seen_at within the hour', async () => {
 		const db = makeDb(env.DB);
 		await seedUser(db);
 		vi.setSystemTime(new Date(1000));
 		const { token } = await createSession(db, 'u1');
-		vi.setSystemTime(new Date(2000));
+		vi.setSystemTime(new Date(1000 + HOUR));
 		const result = await validateSession(db, token);
 		expect(result?.cid).toBe('u1');
 		const stored = await db.select().from(sessions).all();
-		expect(stored[0]?.lastSeenAt).toBe(2000);
+		expect(stored[0]?.lastSeenAt).toBe(1000);
+	});
+
+	it('updates last_seen_at once it is more than an hour old', async () => {
+		const db = makeDb(env.DB);
+		await seedUser(db);
+		vi.setSystemTime(new Date(1000));
+		const { token } = await createSession(db, 'u1');
+		vi.setSystemTime(new Date(1000 + HOUR + 1));
+		const result = await validateSession(db, token);
+		expect(result?.lastSeenAt).toBe(1000 + HOUR + 1);
+		const stored = await db.select().from(sessions).all();
+		expect(stored[0]?.lastSeenAt).toBe(1000 + HOUR + 1);
 	});
 
 	it('extends expires_at when within the refresh window', async () => {

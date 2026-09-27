@@ -17,6 +17,7 @@ const app = new Hono<ApiEnv>();
 app.onError(errorHandler);
 app.use('*', principal);
 app.get('/whoami', (c) => c.json({ ...c.var.principal, source: roleSource(c.var.principal) }));
+app.get('/read', requireScope('users:read'), (c) => c.json({ ok: true }));
 app.get('/write', requireScope('users:write'), (c) => c.json({ ok: true }));
 
 const call = (path: string, token?: string) =>
@@ -97,7 +98,8 @@ describe('principal', () => {
 		const { token } = await issueClientToken(db(), 'bot', ['users:read']);
 		await db()
 			.update(clientTokens)
-			.set({ expiresAt: Date.now() - 1 });
+			.set({ expiresAt: Date.now() - 1 })
+			.where(eq(clientTokens.clientId, 'bot'));
 		expect((await call('/whoami', token)).status).toBe(401);
 	});
 
@@ -121,26 +123,36 @@ describe('principal', () => {
 });
 
 describe('requireScope', () => {
-	it('allows write clients and global:admin users; forbids the rest', async () => {
+	async function seedPrincipals() {
 		await seedClient(db(), 'w', { scopes: ['users:write'] });
 		await seedClient(db(), 'r', { scopes: ['users:read'] });
-		const write = (await issueClientToken(db(), 'w', ['users:write'])).token;
-		const read = (await issueClientToken(db(), 'r', ['users:read'])).token;
 		await upsertFromVatsim(db(), makeVatsimProfile({ cid: '1' }));
 		await upsertFromVatsim(db(), makeVatsimProfile({ cid: '2' }));
 		await db()
 			.insert(userRoles)
 			.values({ cid: '1', role: 'global:admin', source: 'cli', grantedAt: 1 });
-		const admin = (await createSession(db(), '1')).token;
-		const plain = (await createSession(db(), '2')).token;
+		return {
+			write: (await issueClientToken(db(), 'w', ['users:write'])).token,
+			read: (await issueClientToken(db(), 'r', ['users:read'])).token,
+			admin: (await createSession(db(), '1')).token,
+			plain: (await createSession(db(), '2')).token
+		};
+	}
 
-		expect((await call('/write', write)).status).toBe(200);
-		expect((await call('/write', admin)).status).toBe(200);
-		for (const token of [read, plain]) {
-			const res = await call('/write', token);
-			expect(res.status).toBe(403);
+	it.each([
+		{ scope: 'users:read', allowed: ['write', 'read', 'admin'], denied: ['plain'] },
+		{ scope: 'users:write', allowed: ['write', 'admin'], denied: ['read', 'plain'] }
+	] as const)('$scope: allows $allowed; forbids $denied', async ({ scope, allowed, denied }) => {
+		const tokens = await seedPrincipals();
+		const path = `/${scope.split(':')[1]}`;
+		for (const who of allowed) {
+			expect((await call(path, tokens[who])).status, who).toBe(200);
+		}
+		for (const who of denied) {
+			const res = await call(path, tokens[who]);
+			expect(res.status, who).toBe(403);
 			expect(res.headers.get('WWW-Authenticate')).toBe(
-				'Bearer error="insufficient_scope", scope="users:write"'
+				`Bearer error="insufficient_scope", scope="${scope}"`
 			);
 			expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
 				'insufficient_scope'

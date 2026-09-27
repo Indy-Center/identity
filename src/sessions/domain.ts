@@ -5,6 +5,7 @@ import { randomBase32, sha256Hex } from '../crypto';
 
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 export const SESSION_REFRESH_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
+export const LAST_SEEN_WRITE_INTERVAL_MS = 60 * 60 * 1000;
 
 export function createSessionToken(): string {
 	return randomBase32(20);
@@ -67,6 +68,11 @@ export async function validateSession(db: DB, token: string): Promise<Session | 
 		return null;
 	}
 	const shouldRefresh = row.session.expiresAt - now < SESSION_REFRESH_THRESHOLD_MS;
+	// Every /api and /oauth/userinfo call validates a session, so only write
+	// when extending it or when lastSeenAt has gone stale.
+	if (!shouldRefresh && now - row.session.lastSeenAt <= LAST_SEEN_WRITE_INTERVAL_MS) {
+		return row.session;
+	}
 	const newExpiresAt = shouldRefresh ? now + SESSION_LIFETIME_MS : row.session.expiresAt;
 	await db
 		.update(sessions)
