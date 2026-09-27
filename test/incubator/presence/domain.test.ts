@@ -187,3 +187,20 @@ describe('listByArtcc', () => {
 		expect(await listByArtcc('ZID')).toEqual([]);
 	});
 });
+
+describe('feed timeout', () => {
+	it('aborts a hung fetch after 2s and degrades to null', async () => {
+		const timer = new AbortController();
+		const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timer.signal);
+		vi.spyOn(globalThis, 'fetch').mockImplementation(
+			(_url, init) =>
+				new Promise((_resolve, reject) =>
+					init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason))
+				)
+		);
+		const pending = getActiveSession('1234567');
+		timer.abort(new DOMException('timed out', 'TimeoutError'));
+		expect(await pending).toBeNull();
+		expect(timeout).toHaveBeenCalledWith(2000);
+	});
+});

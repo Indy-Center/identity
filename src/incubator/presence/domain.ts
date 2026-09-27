@@ -3,6 +3,8 @@ import { VnasControllerResponseSchema } from './schema';
 import type { OnlineController } from './types';
 
 const TTL_MS = 15_000;
+// A hung upstream must not stall /oauth/userinfo; an abort degrades like any fetch error.
+const FETCH_TIMEOUT_MS = 2_000;
 const FEED_URL = 'https://live.env.vnas.vatsim.net/data-feed/controllers.json';
 
 type Cache = { byCid: Map<string, OnlineController>; fetchedAt: number };
@@ -12,7 +14,7 @@ let inflight: Promise<void> | null = null;
 
 async function fetchAndParse(): Promise<Map<string, OnlineController> | null> {
 	try {
-		const res = await fetch(FEED_URL);
+		const res = await fetch(FEED_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 		if (!res.ok) {
 			console.error(`[presence] feed returned status ${res.status}`);
 			return null;

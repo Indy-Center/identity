@@ -3,6 +3,8 @@ import { VatsimDataFeedSchema } from './schema';
 import type { FlightPlan } from './types';
 
 const TTL_MS = 15_000;
+// A hung upstream must not stall /oauth/userinfo; an abort degrades like any fetch error.
+const FETCH_TIMEOUT_MS = 2_000;
 const FEED_URL = 'https://data.vatsim.net/v3/vatsim-data.json';
 
 type Cache = { byCid: Map<string, FlightPlan>; fetchedAt: number };
@@ -12,7 +14,7 @@ let inflight: Promise<void> | null = null;
 
 async function fetchAndParse(): Promise<Map<string, FlightPlan> | null> {
 	try {
-		const res = await fetch(FEED_URL);
+		const res = await fetch(FEED_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 		if (!res.ok) {
 			console.error(`[flight-plans] datafeed returned status ${res.status}`);
 			return null;
