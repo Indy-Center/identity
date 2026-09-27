@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sha256Hex } from '../../src/crypto';
 import { makeDb } from '../../src/db';
 import { clients, clientTokens } from '../../src/schema';
 import {
@@ -37,6 +38,7 @@ describe('scopes', () => {
 			'users:write'
 		]);
 		expect(grantScopes(['users:read', 'users:write'], 'users:read')).toEqual(['users:read']);
+		expect(grantScopes(['users:write'], 'users:read')).toEqual(['users:read']);
 		expect(grantScopes(['users:read'], 'users:write')).toBeNull();
 		expect(grantScopes(['users:read'], 'bogus')).toBeNull();
 	});
@@ -61,11 +63,25 @@ describe('client tokens', () => {
 		expect(await validateClientToken(db(), token)).toBeNull();
 	});
 
-	it('expires after an hour and deletes the row', async () => {
+	it('revokes only the given token', async () => {
+		await seedClient(db(), 'bot', { scopes: ['users:read'] });
+		const first = await issueClientToken(db(), 'bot', ['users:read']);
+		const second = await issueClientToken(db(), 'bot', ['users:read']);
+		await revokeClientToken(db(), first.token);
+		expect(await validateClientToken(db(), first.token)).toBeNull();
+		expect(await validateClientToken(db(), second.token)).toEqual({
+			clientId: 'bot',
+			scopes: ['users:read']
+		});
+	});
+
+	it('expires after an hour; the next issue deletes the expired row', async () => {
 		await seedClient(db(), 'bot', { scopes: ['users:read'] });
 		const { token } = await issueClientToken(db(), 'bot', ['users:read']);
 		vi.useFakeTimers({ now: Date.now() + CLIENT_TOKEN_LIFETIME_MS + 1 });
 		expect(await validateClientToken(db(), token)).toBeNull();
-		expect(await db().select().from(clientTokens).all()).toHaveLength(0);
+		const fresh = await issueClientToken(db(), 'bot', ['users:read']);
+		const rows = await db().select({ id: clientTokens.id }).from(clientTokens).all();
+		expect(rows).toEqual([{ id: await sha256Hex(fresh.token) }]);
 	});
 });

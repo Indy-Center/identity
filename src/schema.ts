@@ -2,7 +2,8 @@
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 import type { VatsimProfile } from './oauth/vatsim';
 
-export type Scope = 'users:read' | 'users:write';
+export const SCOPES = ['users:read', 'users:write'] as const;
+export type Scope = (typeof SCOPES)[number];
 
 // One row per VATSIM member. Each column has exactly one writer:
 // VATSIM-owned columns are overwritten by upsertFromVatsim at every login;

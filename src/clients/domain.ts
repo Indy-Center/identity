@@ -2,10 +2,9 @@
 // Registered clients and their client-credentials tokens (RFC 6749 §4.4).
 import { and, eq, gt, lt } from 'drizzle-orm';
 import type { DB } from '../db';
-import { clients, clientTokens, type Client, type Scope } from '../schema';
+import { clients, clientTokens, SCOPES, type Client, type Scope } from '../schema';
 import { randomBase32, sha256Hex } from '../crypto';
 
-export const SCOPES: readonly Scope[] = ['users:read', 'users:write'];
 export const CLIENT_TOKEN_LIFETIME_MS = 60 * 60 * 1000;
 
 export async function findClient(db: DB, id: string): Promise<Client | null> {
@@ -42,11 +41,9 @@ export function grantScopes(
 	if (requested === undefined || requested.trim() === '') {
 		return [...allowed];
 	}
-	const wanted = [...new Set(requested.trim().split(/\s+/))];
-	const ok = wanted.every(
-		(s) => (SCOPES as readonly string[]).includes(s) && hasScope(allowed, s as Scope)
-	);
-	return ok ? (wanted as Scope[]) : null;
+	const wanted = new Set(requested.trim().split(/\s+/));
+	const granted = SCOPES.filter((s) => wanted.has(s) && hasScope(allowed, s));
+	return granted.length === wanted.size ? granted : null;
 }
 
 export async function issueClientToken(
@@ -55,6 +52,9 @@ export async function issueClientToken(
 	scopes: Scope[]
 ): Promise<{ token: string; expiresIn: number; scopes: Scope[] }> {
 	const now = Date.now();
+	// Opportunistic cleanup of expired tokens (there is no cron), done here so
+	// validation, which runs on every /api request, stays a pure read.
+	await db.delete(clientTokens).where(lt(clientTokens.expiresAt, now));
 	const token = randomBase32(20);
 	await db.insert(clientTokens).values({
 		id: await sha256Hex(token),
@@ -70,13 +70,10 @@ export async function validateClientToken(
 	db: DB,
 	token: string
 ): Promise<{ clientId: string; scopes: Scope[] } | null> {
-	const now = Date.now();
-	// Opportunistic cleanup; there is no cron.
-	await db.delete(clientTokens).where(lt(clientTokens.expiresAt, now));
 	const row = await db
 		.select({ clientId: clientTokens.clientId, scopes: clientTokens.scopes })
 		.from(clientTokens)
-		.where(and(eq(clientTokens.id, await sha256Hex(token)), gt(clientTokens.expiresAt, now)))
+		.where(and(eq(clientTokens.id, await sha256Hex(token)), gt(clientTokens.expiresAt, Date.now())))
 		.get();
 	return row ?? null;
 }

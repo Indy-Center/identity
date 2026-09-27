@@ -23,6 +23,16 @@ describe('parseClientCredentials', () => {
 		expect(parseClientCredentials(undefined, { client_id: 'charts' })).toBeNull();
 	});
 
+	it('returns null for a secret without a client_id', () => {
+		expect(parseClientCredentials(undefined, { client_secret: 's' })).toBeNull();
+	});
+
+	it('ignores a non-Basic Authorization header and reads the form', () => {
+		expect(parseClientCredentials('Bearer x', { client_id: 'moodle', client_secret: 's' })).toEqual(
+			{ clientId: 'moodle', secret: 's' }
+		);
+	});
+
 	it('is invalid when both methods are used or Basic is malformed', () => {
 		expect(parseClientCredentials(basic('a', 'b'), { client_secret: 'b' })).toBe('invalid');
 		expect(parseClientCredentials('Basic !!!', {})).toBe('invalid');
