@@ -104,6 +104,8 @@ npm test && npm run typecheck && npm run format:check
 
 Pushing to `main` applies D1 migrations to `id_db` and deploys the `id` Worker.
 
+Production needs the `CONNECT_CLIENT_ID` / `CONNECT_CLIENT_SECRET` secrets set on the `id` Worker: `npx wrangler secret put CONNECT_CLIENT_ID --name id` (and the same for `CONNECT_CLIENT_SECRET`).
+
 ## Migrating from auth.flyindycenter.com
 
 The old `identity` Worker on `auth.flyindycenter.com` still serves apps using `@indy-center/identity@1.x`. That package is retired: move to the OAuth flow above, then the old Worker will be deleted.

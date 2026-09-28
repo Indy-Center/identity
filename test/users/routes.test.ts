@@ -52,6 +52,7 @@ describe('GET /api/users', () => {
 		const token = await clientToken('bot', ['users:read']);
 		const res = await api('GET', '/users/1', token);
 		expect(res.status).toBe(200);
+		expect(res.headers.get('Cache-Control')).toBe('no-store');
 		expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
 		const body = (await res.json()) as Record<string, unknown>;
 		expect(body.sub).toBe('1');
@@ -270,7 +271,9 @@ describe('users as principals', () => {
 
 	it('/api/me is for users only', async () => {
 		const token = await clientToken('community', ['users:write']);
-		expect((await api('PATCH', '/me', token, { pronouns: 'x' })).status).toBe(403);
+		const res = await api('PATCH', '/me', token, { pronouns: 'x' });
+		expect(res.status).toBe(403);
+		expect(await errorCode(res)).toBe('access_denied');
 	});
 
 	it('a global:admin user can edit others, with role writes sourced user:<cid>', async () => {
@@ -281,9 +284,9 @@ describe('users as principals', () => {
 			{ role: 'events:can_sign_up', source: 'user:1' }
 		]);
 		expect((await api('PATCH', '/users/2/roles', admin, { remove: ['*'] })).status).toBe(200);
-		expect((await api('PATCH', '/users/2/roles', admin, { remove: ['global:*'] })).status).toBe(
-			403
-		);
+		const globalRemove = await api('PATCH', '/users/2/roles', admin, { remove: ['global:*'] });
+		expect(globalRemove.status).toBe(403);
+		expect(await errorCode(globalRemove)).toBe('access_denied');
 		expect(await listRoleGrants(db(), '2')).toEqual([]);
 	});
 });

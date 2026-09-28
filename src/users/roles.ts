@@ -94,7 +94,7 @@ export async function patchRoles(
 	const remove = patch.remove ?? [];
 	if ([...add, ...remove].some((r) => r.startsWith('global:'))) {
 		throw new IdentityError(
-			'insufficient_scope',
+			'access_denied',
 			403,
 			'global:* roles cannot be added or removed via the API'
 		);

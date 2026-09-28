@@ -177,7 +177,12 @@ oauthRoutes.post(
 		if (!isFormContentType(c)) {
 			return oauthError(c, 'invalid_request', 'body must be application/x-www-form-urlencoded');
 		}
-		const form = await parseFormBody(c);
+		let form: Record<string, string>;
+		try {
+			form = await parseFormBody(c);
+		} catch {
+			return oauthError(c, 'invalid_request', 'body could not be parsed');
+		}
 		const credentials = parseClientCredentials(c.req.header('Authorization'), form);
 		// Both methods at once is a malformed request (§2.3); an undecodable
 		// Basic header is failed client authentication (§5.2).
@@ -190,6 +195,10 @@ oauthRoutes.post(
 		const db = makeDb(c.env.DB);
 		c.header('Cache-Control', 'no-store');
 		c.header('Pragma', 'no-cache');
+
+		if (!form.grant_type) {
+			return oauthError(c, 'invalid_request', 'grant_type is required');
+		}
 
 		if (form.grant_type === 'client_credentials') {
 			const client =
@@ -275,6 +284,7 @@ oauthRoutes.get(
 		const session = token ? await validateSession(db, token) : null;
 		const user = session ? await getUser(db, session.cid) : null;
 		if (!user) {
+			c.header('Cache-Control', 'no-store');
 			c.header('WWW-Authenticate', 'Bearer error="invalid_token"');
 			return c.json({ error: 'invalid_token' }, 401);
 		}

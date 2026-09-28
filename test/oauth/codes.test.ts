@@ -32,32 +32,32 @@ async function seedUser(): Promise<string> {
 describe('authorization codes', () => {
 	it('stores only the hash of the code, with the redirect URI', async () => {
 		const db = makeDb(env.DB);
-		const userId = await seedUser();
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT, 'charts');
+		const cid = await seedUser();
+		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 		expect(code).toMatch(/^[a-z2-7]{32}$/);
 		const rows = await db.select().from(authorizationCodes).all();
 		expect(rows).toHaveLength(1);
 		expect(rows[0]!.id).not.toBe(code);
 		expect(rows[0]!.id).toMatch(/^[0-9a-f]{64}$/);
-		expect(rows[0]!.cid).toBe(userId);
+		expect(rows[0]!.cid).toBe(cid);
 		expect(rows[0]!.redirectUri).toBe(REDIRECT);
 	});
 
 	it('creates no session until the code is exchanged', async () => {
 		const db = makeDb(env.DB);
-		const userId = await seedUser();
-		await createAuthorizationCode(db, userId, REDIRECT, 'charts');
+		const cid = await seedUser();
+		await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 	});
 
 	it('exchanges a code for a valid session exactly once', async () => {
 		const db = makeDb(env.DB);
-		const userId = await seedUser();
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT, 'charts');
+		const cid = await seedUser();
+		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 
 		const first = await exchangeAuthorizationCode(db, code, REDIRECT, 'charts');
 		expect(first).not.toBeNull();
-		expect((await validateSession(db, first!.token))?.cid).toBe(userId);
+		expect((await validateSession(db, first!.token))?.cid).toBe(cid);
 
 		expect(await exchangeAuthorizationCode(db, code, REDIRECT, 'charts')).toBeNull();
 		expect(await db.select().from(authorizationCodes).all()).toHaveLength(0);
@@ -65,8 +65,8 @@ describe('authorization codes', () => {
 
 	it('rejects a mismatched redirect URI and consumes the code', async () => {
 		const db = makeDb(env.DB);
-		const userId = await seedUser();
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT, 'charts');
+		const cid = await seedUser();
+		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 
 		expect(
 			await exchangeAuthorizationCode(db, code, 'http://localhost:5173/', 'charts')
@@ -78,8 +78,8 @@ describe('authorization codes', () => {
 
 	it('rejects a code redeemed by a different client', async () => {
 		const db = makeDb(env.DB);
-		const userId = await seedUser();
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT, 'charts');
+		const cid = await seedUser();
+		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 		expect(await exchangeAuthorizationCode(db, code, REDIRECT, 'moodle')).toBeNull();
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 	});
@@ -91,9 +91,9 @@ describe('authorization codes', () => {
 
 	it('rejects a code for a user disabled since it was issued, and creates no session', async () => {
 		const db = makeDb(env.DB);
-		const userId = await seedUser();
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT, 'charts');
-		await setUserActive(db, userId, false, { reason: 'test' });
+		const cid = await seedUser();
+		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
+		await setUserActive(db, cid, false, { reason: 'test' });
 
 		expect(await exchangeAuthorizationCode(db, code, REDIRECT, 'charts')).toBeNull();
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
@@ -101,8 +101,8 @@ describe('authorization codes', () => {
 
 	it('rejects an expired code and prunes it', async () => {
 		const db = makeDb(env.DB);
-		const userId = await seedUser();
-		const { code } = await createAuthorizationCode(db, userId, REDIRECT, 'charts');
+		const cid = await seedUser();
+		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(Date.now() + AUTHORIZATION_CODE_LIFETIME_MS + 1000);

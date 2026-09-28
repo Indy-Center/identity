@@ -24,6 +24,11 @@ import type { DB } from '../db';
 import type { User } from '../schema';
 
 export const apiRoutes = new Hono<ApiEnv>();
+// Every /api response carries bearer-token-derived data; none of it is cacheable.
+apiRoutes.use('*', async (c, next) => {
+	await next();
+	c.header('Cache-Control', 'no-store');
+});
 apiRoutes.use('*', principal);
 
 const CidParam = z.object({ cid: z.string().regex(/^\d{1,10}$/) });
@@ -212,7 +217,7 @@ apiRoutes.patch(
 	async (c) => {
 		const p = c.var.principal;
 		if (p.kind !== 'user') {
-			throw new IdentityError('insufficient_scope', 403, '/api/me requires a user token');
+			throw new IdentityError('access_denied', 403, '/api/me requires a user token');
 		}
 		const db = makeDb(c.env.DB);
 		const body = c.req.valid('json');

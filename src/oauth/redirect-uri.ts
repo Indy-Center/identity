@@ -4,8 +4,6 @@ import { IdentityError } from '../errors';
 import { findClient } from '../clients/domain';
 import { LOOPBACK, REDIRECT_URI_MAX_LENGTH } from './redirect-uri-rules';
 
-export { REDIRECT_URI_MAX_LENGTH };
-
 // Where identity may send a browser: https on flyindycenter.com or one level
 // of subdomain, or http on a loopback host (LOOPBACK, in redirect-uri-rules.ts)
 // at any port. Both patterns end in (\/[^\s]*)?$, so a bare origin

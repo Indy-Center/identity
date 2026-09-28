@@ -21,10 +21,10 @@ beforeEach(async () => {
 describe('GET /logout', () => {
 	it("ends every session of the user named by identity's cookie and redirects", async () => {
 		const db = makeDb(env.DB);
-		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
+		const { cid } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
 		const { cid: otherId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
-		const identitySession = await createSession(db, userId);
-		await createSession(db, userId); // an app's session for the same user
+		const identitySession = await createSession(db, cid);
+		await createSession(db, cid); // an app's session for the same user
 		await createSession(db, otherId); // someone else's, must survive
 
 		const res = await exports.default.fetch(LOGOUT, {

@@ -97,7 +97,7 @@ describe('patchRoles', () => {
 			.insert(userRoles)
 			.values({ cid: '1', role: 'global:admin', source: 'cli', grantedAt: 1 });
 		await expect(patchRoles(db(), '1', 'c', { add: ['global:admin'] })).rejects.toMatchObject({
-			code: 'insufficient_scope',
+			code: 'access_denied',
 			status: 403
 		});
 		await patchRoles(db(), '1', 'c', { add: ['a:b'] });
@@ -116,7 +116,7 @@ describe('patchRoles', () => {
 				{ add: ['global:admin'] }
 			]) {
 				await expect(patchRoles(db(), '1', source, patch)).rejects.toMatchObject({
-					code: 'insufficient_scope',
+					code: 'access_denied',
 					status: 403
 				});
 			}

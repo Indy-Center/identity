@@ -27,11 +27,11 @@ afterEach(() => {
 async function seedCode(
 	redirectUri = REDIRECT,
 	clientId = 'charts'
-): Promise<{ userId: string; code: string }> {
+): Promise<{ cid: string; code: string }> {
 	const db = makeDb(env.DB);
-	const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
-	const { code } = await createAuthorizationCode(db, userId, redirectUri, clientId);
-	return { userId, code };
+	const { cid } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
+	const { code } = await createAuthorizationCode(db, cid, redirectUri, clientId);
+	return { cid, code };
 }
 
 function postToken(
@@ -64,7 +64,7 @@ async function expectOAuthError(res: Response, error: string) {
 
 describe('POST /oauth/token', () => {
 	it('exchanges a code for an access token that validates', async () => {
-		const { userId, code } = await seedCode();
+		const { cid, code } = await seedCode();
 		const res = await exchange(code);
 		expect(res.status).toBe(200);
 		expect(res.headers.get('Cache-Control')).toBe('no-store');
@@ -82,9 +82,9 @@ describe('POST /oauth/token', () => {
 		expect(body.expires_in).toBeLessThanOrEqual(30 * 24 * 60 * 60);
 
 		const db = makeDb(env.DB);
-		expect((await validateSession(db, body.access_token))?.cid).toBe(userId);
+		expect((await validateSession(db, body.access_token))?.cid).toBe(cid);
 
-		const [row] = await db.select().from(sessions).where(eq(sessions.cid, userId));
+		const [row] = await db.select().from(sessions).where(eq(sessions.cid, cid));
 		const expectedExpiresIn = (row!.expiresAt - Date.now()) / 1000;
 		expect(Math.abs(body.expires_in - expectedExpiresIn)).toBeLessThan(2);
 	});
@@ -102,11 +102,11 @@ describe('POST /oauth/token', () => {
 
 	it('rejects an expired code with invalid_grant and prunes it', async () => {
 		const db = makeDb(env.DB);
-		const { cid: userId } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
+		const { cid } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '2' }));
 		const now = Date.now();
 		await db.insert(authorizationCodes).values({
 			id: await sha256Hex('expiredcode'),
-			cid: userId,
+			cid,
 			clientId: 'charts',
 			redirectUri: REDIRECT,
 			expiresAt: now - 1000,
@@ -120,8 +120,8 @@ describe('POST /oauth/token', () => {
 
 	it('rejects a code for a disabled user with invalid_grant', async () => {
 		const db = makeDb(env.DB);
-		const { userId, code } = await seedCode();
-		await setUserActive(db, userId, false, { reason: 'test' });
+		const { cid, code } = await seedCode();
+		await setUserActive(db, cid, false, { reason: 'test' });
 		await expectOAuthError(await exchange(code), 'invalid_grant');
 	});
 
@@ -138,6 +138,31 @@ describe('POST /oauth/token', () => {
 		);
 	});
 
+	it('rejects a missing grant_type with invalid_request (RFC 6749 §5.2)', async () => {
+		const { code } = await seedCode();
+		await expectOAuthError(
+			await postToken({ code, redirect_uri: REDIRECT, client_id: 'charts' }),
+			'invalid_request'
+		);
+	});
+
+	it('rejects a body that fails to parse with invalid_request, not a 500', async () => {
+		const stream = new ReadableStream({
+			start(controller) {
+				controller.error(new Error('client disconnected'));
+			}
+		});
+		const res = await exports.default.fetch(TOKEN_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: stream,
+			// @ts-expect-error duplex is required by fetch for a streaming body,
+			// but missing from the lib.dom RequestInit type used here.
+			duplex: 'half'
+		});
+		await expectOAuthError(res, 'invalid_request');
+	});
+
 	it('rejects a missing field with invalid_request', async () => {
 		const { code } = await seedCode();
 		await expectOAuthError(
@@ -147,7 +172,7 @@ describe('POST /oauth/token', () => {
 	});
 
 	it('accepts a case-varied form Content-Type with parameters', async () => {
-		const { userId, code } = await seedCode();
+		const { cid, code } = await seedCode();
 		const res = await exports.default.fetch(TOKEN_URL, {
 			method: 'POST',
 			headers: { 'Content-Type': 'Application/X-WWW-Form-Urlencoded; charset=UTF-8' },
@@ -161,7 +186,7 @@ describe('POST /oauth/token', () => {
 		expect(res.status).toBe(200);
 		const db = makeDb(env.DB);
 		const body = (await res.json()) as { access_token: string };
-		expect((await validateSession(db, body.access_token))?.cid).toBe(userId);
+		expect((await validateSession(db, body.access_token))?.cid).toBe(cid);
 	});
 
 	it('rejects a JSON body with invalid_request', async () => {
@@ -196,7 +221,7 @@ describe('POST /oauth/token for a registered client', () => {
 	it('requires and accepts the client secret (client_secret_post)', async () => {
 		const db = makeDb(env.DB);
 		const secret = await seedClient(db, 'moodle', { redirectUris: [MOODLE_REDIRECT] });
-		const { userId, code } = await seedCode(MOODLE_REDIRECT, 'moodle');
+		const { cid, code } = await seedCode(MOODLE_REDIRECT, 'moodle');
 		const res = await postToken({
 			grant_type: 'authorization_code',
 			code,
@@ -206,7 +231,7 @@ describe('POST /oauth/token for a registered client', () => {
 		});
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { access_token: string };
-		expect((await validateSession(db, body.access_token))?.cid).toBe(userId);
+		expect((await validateSession(db, body.access_token))?.cid).toBe(cid);
 	});
 
 	it('accepts the client secret via client_secret_basic', async () => {

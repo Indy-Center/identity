@@ -53,6 +53,7 @@ function userinfo(token: string): Promise<Response> {
 
 async function expectInvalidToken(res: Response) {
 	expect(res.status).toBe(401);
+	expect(res.headers.get('Cache-Control')).toBe('no-store');
 	expect(res.headers.get('WWW-Authenticate')).toBe('Bearer error="invalid_token"');
 	expect(await res.json()).toEqual({ error: 'invalid_token' });
 }
