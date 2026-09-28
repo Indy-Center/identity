@@ -34,6 +34,18 @@ Targets the REMOTE id_db unless --local is given. A remote delete needs --yes.`;
 class UsageError extends Error {}
 
 function d1(sql: string, local: boolean): string {
+	try {
+		return runWrangler(sql, local);
+	} catch (err) {
+		// wrangler --json writes its {"error": …} JSON to stdout, not stderr. The SQL
+		// in the message carries only a secret's hash, never the secret.
+		const stdout = (err as { stdout?: unknown }).stdout;
+		const detail = typeof stdout === 'string' && stdout.trim() ? `\n${stdout.trim()}` : '';
+		throw new Error(`${err instanceof Error ? err.message : String(err)}${detail}`);
+	}
+}
+
+function runWrangler(sql: string, local: boolean): string {
 	return execFileSync(
 		'npx',
 		[
@@ -105,7 +117,17 @@ async function main(): Promise<void> {
 		}
 		if (action === 'rotate') {
 			const secret = generateClientSecret(id);
-			const changed = returnedRowCount(run(await rotateClientSql(id, secret)));
+			const output = run(await rotateClientSql(id, secret));
+			let changed: number;
+			try {
+				changed = returnedRowCount(output);
+			} catch (err) {
+				// wrangler succeeded, so the new secret may already be live: never discard it.
+				console.error(
+					`warning: could not confirm the rotation from wrangler's output (${err instanceof Error ? err.message : err}); if client "${id}" exists, this is now its secret`
+				);
+				return printSecret(id, secret);
+			}
 			if (changed !== 1) {
 				throw new Error(`no client "${id}" in ${where} id_db; nothing rotated`);
 			}
