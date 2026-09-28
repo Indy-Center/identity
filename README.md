@@ -1,93 +1,112 @@
-# identity
+# id
 
-Centralized identity Worker for `*.flyindycenter.com`. Wraps VATSIM Connect OAuth, mints session cookies on `.flyindycenter.com`, exposes typed RPC over Cloudflare service bindings.
+Identity for `*.flyindycenter.com`: an OAuth 2.0 authorization server that brokers VATSIM Connect, plus a small API for users and roles.
+
+- **Live:** https://id.flyindycenter.com
+- **API reference:** https://id.flyindycenter.com/docs (OpenAPI at `/openapi.json`)
 
 [![Tests and Verification](https://github.com/Indy-Center/identity/actions/workflows/ci.yml/badge.svg)](https://github.com/Indy-Center/identity/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## HTTP surface
+## Log users in
 
-- `GET /login?return_url=…` starts the OAuth flow (browser).
-- `GET /login/callback?code=…&state=…` is the OAuth callback from VATSIM (browser).
-- `GET /healthz` is the liveness check.
+Identity is plain OAuth 2.0 (authorization-code grant), so use any OAuth client. With [arctic](https://arcticjs.dev):
 
-Session validation, role management, profile updates, and logout all go over **RPC**, not HTTP. Consumer Workers call `env.IDENTITY.validateSession(token)`, `env.IDENTITY.invalidateSession(token)`, etc.
+```ts
+import { OAuth2Client, generateState } from 'arctic';
 
-> **Why no HTTP surface for those?** RPC over service bindings is in-process — no network round trip, no JSON serialization, no CORS, typed errors propagating cleanly. For Workers consuming identity, that's strictly better than HTTP. We've considered adding a thin HTTP layer (e.g. `GET /api/me`, `POST /api/logout`) wrapping the same internal functions the RPC methods use, and it's the right answer the moment a non-Worker consumer shows up — browser-only static site, mobile app, third-party tool — but until then we stay RPC-only. If you need this, see the deferred-option note in `WIKI_APP_DESIGN.md`.
+const ID = 'https://id.flyindycenter.com';
+// First-party apps on *.flyindycenter.com or localhost need no registration:
+// client_id is a label and there is no secret.
+const oauth = new OAuth2Client('my-app', null, 'http://localhost:5173/auth/callback');
 
-## Project layout
+// 1. Send the browser to identity (store `state` in a short-lived cookie).
+const state = generateState();
+const url = oauth.createAuthorizationURL(`${ID}/oauth/authorize`, state, []);
 
-- `src/users/`, `src/sessions/`, `src/roles/`: domain modules. Plain async functions over a Drizzle `DB`. `src/index.ts` delegates RPC methods straight to these.
-- `src/client/`: the consumer-facing surface. Types (`User`, `SessionPayload`, `AttributePatch`, `VatsimProfile`), the `IdentityRpc` interface, and `IdentityError`. Other Workers import from here so they only see the public contract, not the implementation.
-- `src/migrations/`: D1 migrations, applied automatically on deploy.
+// 2. On the callback, check state, then exchange the code.
+const tokens = await oauth.validateAuthorizationCode(`${ID}/oauth/token`, code, null);
 
-## Local development
+// 3. Who is it? `sub` is the VATSIM CID; `roles` are app:permission strings.
+const me = await fetch(`${ID}/oauth/userinfo`, {
+	headers: { Authorization: `Bearer ${tokens.accessToken()}` }
+}).then((r) => r.json());
+```
+
+Keep the access token in your own session. Call `/oauth/userinfo` again whenever you need current roles. Logout and bans take effect immediately.
+
+Send users to `https://id.flyindycenter.com/logout?return_url=…` to sign out everywhere.
+
+Apps on other domains (Moodle, Wiki.js) must be **registered clients** with exact redirect URIs and a secret; see below.
+
+## Call the API from a service
+
+Services use the client-credentials grant (RFC 6749 §4.4). A registered client authenticates with `client_secret_basic` (as below) or `client_secret_post` (`client_id`/`client_secret` in the form body):
+
+```bash
+curl -u community:$SECRET -d grant_type=client_credentials https://id.flyindycenter.com/oauth/token
+# → { "access_token": "…", "token_type": "Bearer", "expires_in": 3600, "scope": "users:read users:write" }
+# a client with no granted scopes, or a scope request it can't satisfy, gets 400 invalid_scope
+
+curl -H "Authorization: Bearer $TOKEN" https://id.flyindycenter.com/api/users/1234567
+```
+
+Roles are `app:permission` strings. `/api` request bodies must be `Content-Type: application/json`. Each client can only change the roles it granted, and can't add or remove `global:*` roles (see below):
+
+```bash
+curl -X PATCH -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"add":["events:can_sign_up"],"remove":["community:admin"]}' \
+  https://id.flyindycenter.com/api/users/1234567/roles
+```
+
+Everything else is at [/docs](https://id.flyindycenter.com/docs).
+
+## Manage clients and admin roles
+
+These commands need Cloudflare access, and run against production unless you pass `--local`:
+
+```bash
+npm run client -- create community --scope users:read --scope users:write
+npm run client -- create moodle --redirect-uri https://moodle.flyindycenter.com/admin/oauth2callback.php
+npm run client -- rotate community           # new secret; old tokens die immediately
+npm run client -- delete community --yes     # --yes is required against the remote db
+npm run client -- list
+npm run role -- grant 1234567 global:admin   # global:* roles can only be granted/revoked here
+npm run role -- revoke 1234567 global:admin
+```
+
+Notes:
+
+- `create` needs at least one `--scope` or `--redirect-uri`, else the client could do nothing.
+- Redirect URIs must be `https` (`http` only on `localhost`, `127.0.0.1` or `[::1]`), must not carry a fragment, and are matched **exactly** at `/oauth/authorize` — no prefix or wildcard matching.
+- `rotate`, `delete` and `role revoke` fail loudly if nothing matched (unknown client id, or no such grant).
+- The client id `cli` is reserved.
+- The API refuses to add or remove any `global:` role from either client-credentials or user tokens; only `npm run role` can touch them.
+
+## Security notes
+
+A `users:write` token can't grant or revoke `global:*` roles, but it can disable any user — including admins — which immediately ends all of that user's sessions. If that locks out every admin, recover with `npm run role -- grant <cid> global:admin` on a working account, then re-enable the rest with `PATCH /api/users/:cid` (`{"active": true}`, from that account or another client with `users:write`) or directly against `id_db`.
+
+## Working on identity
 
 ```bash
 npm install
-npm run db:migrate:local   # apply D1 migrations to the local sqlite
-npm run dev                # wrangler dev on http://localhost:8787
-npm test                   # vitest with workers pool
-npm run cf-typegen         # regenerate worker-configuration.d.ts after wrangler.jsonc changes
-```
-
-For OAuth testing locally, register a VATSIM Connect dev client with redirect URI `http://localhost:8787/login/callback`, then copy `.dev.vars.example` to `.dev.vars` and fill in the credentials.
-
-When `COOKIE_DOMAIN=localhost`, identity also accepts loopback `return_url` values (`http://localhost:*`, `http://127.0.0.1:*`, `http://[::1]:*`) so dev consumer apps can complete the OAuth flow against the local worker. Production stays strict.
-
-If the local D1 gets tangled up:
-
-```bash
-npx wrangler d1 delete identity_db
-npx wrangler d1 create identity_db
-# Copy the new database_id into wrangler.jsonc
+cp .dev.vars.example .dev.vars   # VATSIM Connect sandbox credentials
 npm run db:migrate:local
+npm run dev                      # http://localhost:8787
 ```
 
-## Tests
+Register a sandbox client at `auth-dev.vatsim.net` with the redirect URI `http://localhost:8787/login/callback`. Reset the local database with `rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local`.
 
 ```bash
-npm test
-npm run typecheck
+npm test && npm run typecheck && npm run format:check
 ```
 
-## Deployment
+Pushing to `main` applies D1 migrations to `id_db` and deploys the `id` Worker.
 
-Pushing to `main` triggers `.github/workflows/build-and-deploy.yml`, which applies pending D1 migrations and then deploys the Worker. Requires a `CLOUDFLARE_WORKERS_API_KEY` repository secret with `Workers Scripts:Edit` and `D1:Edit` permissions.
+## Migrating from auth.flyindycenter.com
 
-One-time setup per environment:
-
-```bash
-wrangler d1 create identity_db
-# copy the database_id into wrangler.jsonc
-wrangler secret put CONNECT_CLIENT_ID
-wrangler secret put CONNECT_CLIENT_SECRET
-```
-
-## Consumer apps
-
-Other Workers consume identity via a service binding. In their `wrangler.jsonc`:
-
-```jsonc
-"services": [
-  { "binding": "IDENTITY", "service": "identity" }
-]
-```
-
-Type the binding against `IdentityRpc` (from `src/client/api.ts`) so consumers only see the public surface:
-
-```ts
-import type { IdentityRpc } from './identity-client';
-
-type Env = {
-	IDENTITY: Service<IdentityRpc>;
-};
-
-const session = await env.IDENTITY.validateSession(cookieToken);
-if (!session) return new Response('unauthorized', { status: 401 });
-// session.userId is the canonical UUID; session.roles is string[]
-const user = await env.IDENTITY.getUserById(session.userId);
-```
+The old `identity` Worker on `auth.flyindycenter.com` still serves apps using `@indy-center/identity@1.x`. That package is retired: move to the OAuth flow above, then the old Worker will be deleted.
 
 ## Disclaimer
 
