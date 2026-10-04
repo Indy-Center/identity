@@ -22,6 +22,13 @@
 			"when": 1791074431390,
 			"tag": "0002_public_synch",
 			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "6",
+			"when": 1791075575729,
+			"tag": "0003_woozy_magneto",
+			"breakpoints": true
 		}
 	]
 }

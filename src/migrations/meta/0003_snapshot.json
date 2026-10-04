@@ -1,0 +1,494 @@
+{
+	"version": "6",
+	"dialect": "sqlite",
+	"id": "517c984b-8167-4b70-8152-4a371250ddd9",
+	"prevId": "1eb1c25a-397f-4e6f-9e64-0cddecd5acaf",
+	"tables": {
+		"authorization_codes": {
+			"name": "authorization_codes",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"cid": {
+					"name": "cid",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"client_id": {
+					"name": "client_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"redirect_uri": {
+					"name": "redirect_uri",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"expires_at": {
+					"name": "expires_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"idx_authorization_codes_expires": {
+					"name": "idx_authorization_codes_expires",
+					"columns": ["expires_at"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {
+				"authorization_codes_cid_users_cid_fk": {
+					"name": "authorization_codes_cid_users_cid_fk",
+					"tableFrom": "authorization_codes",
+					"tableTo": "users",
+					"columnsFrom": ["cid"],
+					"columnsTo": ["cid"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"client_tokens": {
+			"name": "client_tokens",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"client_id": {
+					"name": "client_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"scopes": {
+					"name": "scopes",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"expires_at": {
+					"name": "expires_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"idx_client_tokens_expires": {
+					"name": "idx_client_tokens_expires",
+					"columns": ["expires_at"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {
+				"client_tokens_client_id_clients_id_fk": {
+					"name": "client_tokens_client_id_clients_id_fk",
+					"tableFrom": "client_tokens",
+					"tableTo": "clients",
+					"columnsFrom": ["client_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"clients": {
+			"name": "clients",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"secret_hash": {
+					"name": "secret_hash",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"redirect_uris": {
+					"name": "redirect_uris",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"scopes": {
+					"name": "scopes",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"clients_secret_hash_unique": {
+					"name": "clients_secret_hash_unique",
+					"columns": ["secret_hash"],
+					"isUnique": true
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"sessions": {
+			"name": "sessions",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"cid": {
+					"name": "cid",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"client_id": {
+					"name": "client_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"expires_at": {
+					"name": "expires_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"last_seen_at": {
+					"name": "last_seen_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"idx_sessions_cid": {
+					"name": "idx_sessions_cid",
+					"columns": ["cid"],
+					"isUnique": false
+				},
+				"idx_sessions_expires": {
+					"name": "idx_sessions_expires",
+					"columns": ["expires_at"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {
+				"sessions_cid_users_cid_fk": {
+					"name": "sessions_cid_users_cid_fk",
+					"tableFrom": "sessions",
+					"tableTo": "users",
+					"columnsFrom": ["cid"],
+					"columnsTo": ["cid"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"user_roles": {
+			"name": "user_roles",
+			"columns": {
+				"cid": {
+					"name": "cid",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"role": {
+					"name": "role",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"source": {
+					"name": "source",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"granted_at": {
+					"name": "granted_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"idx_user_roles_role": {
+					"name": "idx_user_roles_role",
+					"columns": ["role"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"user_roles_cid_role_source_pk": {
+					"columns": ["cid", "role", "source"],
+					"name": "user_roles_cid_role_source_pk"
+				}
+			},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"users": {
+			"name": "users",
+			"columns": {
+				"cid": {
+					"name": "cid",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"first_name": {
+					"name": "first_name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"last_name": {
+					"name": "last_name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"email": {
+					"name": "email",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"rating": {
+					"name": "rating",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"pilot_rating": {
+					"name": "pilot_rating",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"division": {
+					"name": "division",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"region": {
+					"name": "region",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"subdivision": {
+					"name": "subdivision",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"vatsim_profile": {
+					"name": "vatsim_profile",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"vatsim_synced_at": {
+					"name": "vatsim_synced_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"preferred_name": {
+					"name": "preferred_name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"pronouns": {
+					"name": "pronouns",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"operating_initials": {
+					"name": "operating_initials",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"discord_id": {
+					"name": "discord_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"teamspeak_uid": {
+					"name": "teamspeak_uid",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"active": {
+					"name": "active",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": true
+				},
+				"disabled_reason": {
+					"name": "disabled_reason",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"disabled_at": {
+					"name": "disabled_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"users_discord_id_unique": {
+					"name": "users_discord_id_unique",
+					"columns": ["discord_id"],
+					"isUnique": true
+				},
+				"users_teamspeak_uid_unique": {
+					"name": "users_teamspeak_uid_unique",
+					"columns": ["teamspeak_uid"],
+					"isUnique": true
+				},
+				"idx_users_email": {
+					"name": "idx_users_email",
+					"columns": ["email"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		}
+	},
+	"views": {},
+	"enums": {},
+	"_meta": {
+		"schemas": {},
+		"tables": {},
+		"columns": {}
+	},
+	"internal": {
+		"indexes": {}
+	}
+}

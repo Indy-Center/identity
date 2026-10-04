@@ -88,11 +88,7 @@ export async function updateProfile(db: DB, cid: string, patch: ProfilePatch): P
 		return row;
 	} catch (err) {
 		if (isUniqueViolation(err)) {
-			throw new IdentityError(
-				'conflict',
-				409,
-				'discord_id, teamspeak_uid or operating_initials already in use'
-			);
+			throw new IdentityError('conflict', 409, 'discord_id or teamspeak_uid already in use');
 		}
 		throw err;
 	}

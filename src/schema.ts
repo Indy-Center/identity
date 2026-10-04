@@ -28,7 +28,7 @@ export const users = sqliteTable(
 		// owned by identity
 		preferredName: text('preferred_name'),
 		pronouns: text('pronouns'),
-		operatingInitials: text('operating_initials').unique(),
+		operatingInitials: text('operating_initials'),
 		discordId: text('discord_id').unique(),
 		teamspeakUid: text('teamspeak_uid').unique(),
 		active: integer('active', { mode: 'boolean' }).notNull().default(true),
