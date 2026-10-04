@@ -3,8 +3,15 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { makeDb } from '../db';
 import { exchangeCodeForToken, fetchVatsimProfile } from './vatsim';
-import { createSession, deleteAllSessionsForUser, findSessionByToken } from '../sessions/domain';
-import { upsertFromVatsim } from '../users/domain';
+import {
+	createSession,
+	deleteAllSessionsForUser,
+	findSessionByToken,
+	validateSession
+} from '../sessions/domain';
+import { getUser, upsertFromVatsim } from '../users/domain';
+import { listRoles } from '../users/roles';
+import { toClaims } from '../users/claims';
 import { IdentityError } from '../errors';
 import { logEvent } from '../log';
 import { createAuthorizationCode } from './codes';
@@ -122,4 +129,26 @@ logoutRoutes.get('/', async (c) => {
 	clearLegacySessionCookie(c);
 
 	return c.redirect(returnUrl, 302);
+});
+
+export const meRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
+
+// The signed-in browser's own record, read from identity's cookie. This is the
+// only route that takes the cookie as authentication, and it only reads:
+// /oauth/userinfo and /api stay bearer-only, so no other site can act through
+// a visitor's browser.
+meRoutes.get('/', async (c) => {
+	c.header('Cache-Control', 'no-store');
+	const token = getCookie(c, 'identity_session', 'host');
+	const db = makeDb(c.env.DB);
+	const session = token ? await validateSession(db, token) : null;
+	const user = session ? await getUser(db, session.cid) : null;
+	if (!user) {
+		throw new IdentityError(
+			'unauthenticated',
+			401,
+			'not signed in: log in through an Indy Center app first'
+		);
+	}
+	return c.json({ ...toClaims(user, await listRoles(db, user.cid)), email: user.email });
 });

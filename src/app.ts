@@ -4,7 +4,7 @@ import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { errorHandler, notFoundHandler } from './error-handler';
-import { loginRoutes, logoutRoutes } from './oauth/login-routes';
+import { loginRoutes, logoutRoutes, meRoutes } from './oauth/login-routes';
 import { oauthRoutes } from './oauth/routes';
 import { authorizationServerMetadata } from './oauth/metadata';
 import { apiRoutes } from './api/routes';
@@ -32,6 +32,7 @@ export function buildApp() {
 	app.route('/oauth', oauthRoutes);
 	app.route('/login', loginRoutes);
 	app.route('/logout', logoutRoutes);
+	app.route('/me', meRoutes);
 	app.route('/api', apiRoutes);
 
 	app.use('/openapi.json', async (c, next) => {
