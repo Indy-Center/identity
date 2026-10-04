@@ -1,4 +1,3 @@
-// src/error-handler.ts
 import type { ErrorHandler, NotFoundHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { IdentityError } from './errors';

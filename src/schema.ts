@@ -1,8 +1,10 @@
-// src/schema.ts
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 import type { VatsimProfile } from './oauth/vatsim';
 
-export const SCOPES = ['users:read', 'users:write'] as const;
+// What a client may do on /api. A service's own token carries its client's
+// scopes; a user's token is capped by the scopes of the client it was issued
+// through (src/api/principal.ts).
+export const SCOPES = ['users:read', 'users:write', 'clients:manage'] as const;
 export type Scope = (typeof SCOPES)[number];
 
 // One row per VATSIM member. Each column has exactly one writer:
@@ -28,6 +30,7 @@ export const users = sqliteTable(
 		pronouns: text('pronouns'),
 		operatingInitials: text('operating_initials').unique(),
 		discordId: text('discord_id').unique(),
+		teamspeakUid: text('teamspeak_uid').unique(),
 		active: integer('active', { mode: 'boolean' }).notNull().default(true),
 		disabledReason: text('disabled_reason'),
 		disabledAt: integer('disabled_at'),
@@ -46,6 +49,9 @@ export const sessions = sqliteTable(
 		cid: text('cid')
 			.notNull()
 			.references(() => users.cid, { onDelete: 'cascade' }),
+		// The client the token was issued to at /oauth/token; null for
+		// identity's own cookie session. No FK: it may be an unregistered label.
+		clientId: text('client_id'),
 		expiresAt: integer('expires_at').notNull(),
 		createdAt: integer('created_at').notNull(),
 		lastSeenAt: integer('last_seen_at').notNull()

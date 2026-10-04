@@ -51,6 +51,7 @@ describe('principal', () => {
 			kind: 'user',
 			cid: '9',
 			roles: ['a:b'],
+			scopes: [],
 			source: 'user:9'
 		});
 	});
@@ -134,14 +135,26 @@ describe('requireScope', () => {
 		return {
 			write: (await issueClientToken(db(), 'w', ['users:write'])).token,
 			read: (await issueClientToken(db(), 'r', ['users:read'])).token,
-			admin: (await createSession(db(), '1')).token,
-			plain: (await createSession(db(), '2')).token
+			// A user's token is capped by the client it was issued through.
+			admin: (await createSession(db(), '1', 'w')).token,
+			adminViaRead: (await createSession(db(), '1', 'r')).token,
+			adminViaUnregistered: (await createSession(db(), '1', 'some-label')).token,
+			adminBare: (await createSession(db(), '1')).token,
+			plain: (await createSession(db(), '2', 'w')).token
 		};
 	}
 
 	it.each([
-		{ scope: 'users:read', allowed: ['write', 'read', 'admin'], denied: ['plain'] },
-		{ scope: 'users:write', allowed: ['write', 'admin'], denied: ['read', 'plain'] }
+		{
+			scope: 'users:read',
+			allowed: ['write', 'read', 'admin', 'adminViaRead'],
+			denied: ['plain', 'adminViaUnregistered', 'adminBare']
+		},
+		{
+			scope: 'users:write',
+			allowed: ['write', 'admin'],
+			denied: ['read', 'plain', 'adminViaRead', 'adminViaUnregistered', 'adminBare']
+		}
 	] as const)('$scope: allows $allowed; forbids $denied', async ({ scope, allowed, denied }) => {
 		const tokens = await seedPrincipals();
 		const path = `/${scope.split(':')[1]}`;

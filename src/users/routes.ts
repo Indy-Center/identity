@@ -1,14 +1,13 @@
-// src/users/routes.ts
-// /api/users and /api/me. Every route runs behind `principal`; see
-// src/api/principal.ts for who may call what. No CORS: server-to-server only.
+// /api/users and /api/me, mounted by src/api/routes.ts behind `principal`; see
+// src/api/principal.ts for who may call what.
 import { Hono } from 'hono';
-import { describeRoute, resolver } from 'hono-openapi';
+import { describeRoute } from 'hono-openapi';
 import { z } from 'zod';
 import { makeDb } from '../db';
 import { IdentityError } from '../errors';
 import { validate } from '../validation';
-import { errors } from '../openapi';
-import { principal, requireScope, roleSource, type ApiEnv } from '../api/principal';
+import { errors, ok } from '../openapi';
+import { requireScope, roleSource, type ApiEnv } from '../api/principal';
 import { getUser, listUsers, setUserActive, updateProfile, type ProfilePatch } from './domain';
 import {
 	RoleGrantSchema,
@@ -23,13 +22,7 @@ import { ClaimsSchema, toClaims } from './claims';
 import type { DB } from '../db';
 import type { User } from '../schema';
 
-export const apiRoutes = new Hono<ApiEnv>();
-// Every /api response carries bearer-token-derived data; none of it is cacheable.
-apiRoutes.use('*', async (c, next) => {
-	await next();
-	c.header('Cache-Control', 'no-store');
-});
-apiRoutes.use('*', principal);
+export const userRoutes = new Hono<ApiEnv>();
 
 const CidParam = z.object({ cid: z.string().regex(/^\d{1,10}$/) });
 
@@ -51,6 +44,12 @@ const UserPatchSchema = z
 			.regex(/^\d{17,20}$/)
 			.nullable()
 			.optional(),
+		// A TeamSpeak identity's unique ID: base64 of a SHA-1 digest.
+		teamspeak_uid: z
+			.string()
+			.regex(/^[A-Za-z0-9+/]{27}=$/)
+			.nullable()
+			.optional(),
 		active: z.boolean().optional(),
 		disabled_reason: z.string().trim().max(500).optional()
 	})
@@ -59,9 +58,13 @@ const UserPatchSchema = z
 		path: ['disabled_reason']
 	});
 const ListQuery = z
-	.object({ role: RoleNameSchema.optional(), discord_id: z.string().min(1).optional() })
-	.refine((q) => (q.role === undefined) !== (q.discord_id === undefined), {
-		message: 'exactly one of role or discord_id is required'
+	.object({
+		role: RoleNameSchema.optional(),
+		discord_id: z.string().min(1).optional(),
+		teamspeak_uid: z.string().min(1).optional()
+	})
+	.refine((q) => Object.values(q).filter((v) => v !== undefined).length === 1, {
+		message: 'exactly one of role, discord_id or teamspeak_uid is required'
 	});
 const RolePatchSchema = z.strictObject({
 	add: z.array(RoleNameSchema).max(100).optional(),
@@ -70,11 +73,6 @@ const RolePatchSchema = z.strictObject({
 
 const tags = ['Users'];
 const bearer = [{ bearerAuth: [] }];
-
-/** A describeRoute() `responses` 200 entry for a zod schema. */
-function ok(description: string, schema: z.ZodTypeAny) {
-	return { description, content: { 'application/json': { schema: resolver(schema) } } };
-}
 
 async function claimsFor(db: DB, user: User) {
 	return toClaims(user, await listRoles(db, user.cid));
@@ -85,16 +83,17 @@ function toProfilePatch(body: z.infer<typeof UserPatchSchema>): ProfilePatch {
 		preferredName: body.preferred_name,
 		pronouns: body.pronouns,
 		operatingInitials: body.operating_initials,
-		discordId: body.discord_id
+		discordId: body.discord_id,
+		teamspeakUid: body.teamspeak_uid
 	};
 }
 
-apiRoutes.get(
+userRoutes.get(
 	'/users',
 	describeRoute({
 		tags,
 		security: bearer,
-		summary: 'List users by role or Discord ID (users:read)',
+		summary: 'List users by role, Discord ID or TeamSpeak UID (users:read)',
 		responses: {
 			200: ok('Claims for each matching user', z.array(ClaimsSchema)),
 			...errors(401, 403)
@@ -105,18 +104,23 @@ apiRoutes.get(
 	async (c) => {
 		const q = c.req.valid('query');
 		const db = makeDb(c.env.DB);
-		if (q.discord_id !== undefined) {
-			// discord_id is unique: at most one user.
-			const found = await listUsers(db, { discordId: q.discord_id });
+		if (q.role === undefined) {
+			// discord_id and teamspeak_uid are unique: at most one user.
+			const found = await listUsers(
+				db,
+				q.discord_id !== undefined
+					? { discordId: q.discord_id }
+					: { teamspeakUid: q.teamspeak_uid! }
+			);
 			return c.json(await Promise.all(found.map((u) => claimsFor(db, u))));
 		}
-		const found = await listUsers(db, { role: q.role! });
-		const roles = await listRolesOfHolders(db, q.role!);
+		const found = await listUsers(db, { role: q.role });
+		const roles = await listRolesOfHolders(db, q.role);
 		return c.json(found.map((u) => toClaims(u, roles.get(u.cid) ?? [])));
 	}
 );
 
-apiRoutes.get(
+userRoutes.get(
 	'/users/:cid',
 	describeRoute({
 		tags,
@@ -136,7 +140,7 @@ apiRoutes.get(
 	}
 );
 
-apiRoutes.patch(
+userRoutes.patch(
 	'/users/:cid',
 	describeRoute({
 		tags,
@@ -159,7 +163,7 @@ apiRoutes.patch(
 	}
 );
 
-apiRoutes.get(
+userRoutes.get(
 	'/users/:cid/roles',
 	describeRoute({
 		tags,
@@ -175,7 +179,7 @@ apiRoutes.get(
 	async (c) => c.json(await listRoleGrants(makeDb(c.env.DB), c.req.valid('param').cid))
 );
 
-apiRoutes.patch(
+userRoutes.patch(
 	'/users/:cid/roles',
 	describeRoute({
 		tags,
@@ -202,7 +206,7 @@ apiRoutes.patch(
 	}
 );
 
-apiRoutes.patch(
+userRoutes.patch(
 	'/me',
 	describeRoute({
 		tags,

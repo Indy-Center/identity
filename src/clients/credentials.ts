@@ -1,4 +1,3 @@
-// src/clients/credentials.ts
 // Client authentication at /oauth/token (RFC 6749 §2.3.1): client_secret_basic
 // or client_secret_post, never both.
 export type ClientCredentials = { clientId: string; secret: string };

@@ -1,4 +1,3 @@
-// test/oauth/userinfo.test.ts
 import { env, exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
@@ -80,6 +79,7 @@ describe('GET /oauth/userinfo', () => {
 			roles: ['community:admin'],
 			operating_initials: null,
 			discord_id: null,
+			teamspeak_uid: null,
 			active: true,
 			active_session: null,
 			active_flight_plan: null

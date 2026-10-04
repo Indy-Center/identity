@@ -1,4 +1,3 @@
-// src/incubator/presence/domain.ts
 import { VnasControllerResponseSchema } from './schema';
 import type { OnlineController } from './types';
 
@@ -60,11 +59,6 @@ export async function ensureFresh(): Promise<void> {
 export async function getActiveSession(cid: string): Promise<OnlineController | null> {
 	await ensureFresh();
 	return cache?.byCid.get(cid) ?? null;
-}
-
-export async function listByArtcc(artccId: string): Promise<OnlineController[]> {
-	await ensureFresh();
-	return [...(cache?.byCid.values() ?? [])].filter((c) => c.artccId === artccId);
 }
 
 // Test-only hook for clearing the module-scoped cache between runs.

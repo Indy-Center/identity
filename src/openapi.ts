@@ -1,4 +1,3 @@
-// src/openapi.ts
 // The one error-envelope schema for OpenAPI docs, shared by the auto-injected
 // 400 (hono-openapi's own default body is {success,error,data}; ours is the
 // real body error-handler.ts writes) and every route's documented 401/403/
@@ -8,6 +7,9 @@
 // field-by-field (not on the whole object — that would make `required`
 // readonly and openAPIRouteHandler wants a plain string[]), and
 // openAPIRouteHandler structurally checks the result at the call site.
+import { resolver } from 'hono-openapi';
+import type { z } from 'zod';
+
 const ERROR_SCHEMA_NAME = 'Error';
 
 export const errorSchemas = {
@@ -52,4 +54,9 @@ export const defaultValidationErrorResponse = errorResponse(400);
 /** describeRoute()'s `responses` entries for the given error status codes. */
 export function errors(...statuses: Exclude<ErrorStatus, 400>[]) {
 	return Object.fromEntries(statuses.map((status) => [status, errorResponse(status)]));
+}
+
+/** A describeRoute() `responses` success entry for a zod schema. */
+export function ok(description: string, schema: z.ZodTypeAny) {
+	return { description, content: { 'application/json': { schema: resolver(schema) } } };
 }

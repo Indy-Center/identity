@@ -1,4 +1,3 @@
-// src/oauth/redirect-uri-rules.ts
 // Dependency-free redirect URI rules, shared with scripts/manage-sql.ts (Node).
 
 // http on a loopback host (RFC 8252 §7.3) at any port. The pattern ends in

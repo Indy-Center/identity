@@ -1,13 +1,27 @@
 {
-  "version": "7",
-  "dialect": "sqlite",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "6",
-      "when": 1790529050136,
-      "tag": "0000_opposite_shiver_man",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "sqlite",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "6",
+			"when": 1790529050136,
+			"tag": "0000_opposite_shiver_man",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "6",
+			"when": 1791073588399,
+			"tag": "0001_military_gravity",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "6",
+			"when": 1791074431390,
+			"tag": "0002_public_synch",
+			"breakpoints": true
+		}
+	]
 }

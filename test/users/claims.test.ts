@@ -1,4 +1,3 @@
-// test/users/claims.test.ts
 import { describe, expect, it } from 'vitest';
 import { toClaims } from '../../src/users/claims';
 import type { User } from '../../src/schema';
@@ -20,6 +19,7 @@ function user(overrides: Partial<User> = {}): User {
 		pronouns: null,
 		operatingInitials: null,
 		discordId: null,
+		teamspeakUid: null,
 		active: true,
 		disabledReason: null,
 		disabledAt: null,
@@ -46,6 +46,7 @@ describe('toClaims', () => {
 			roles: ['community:admin'],
 			operating_initials: null,
 			discord_id: null,
+			teamspeak_uid: null,
 			active: true
 		});
 	});

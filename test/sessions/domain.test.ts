@@ -3,12 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeDb } from '../../src/db';
 import { users, sessions } from '../../src/schema';
-import {
-	createSessionToken,
-	createSession,
-	findSessionByToken,
-	validateSession
-} from '../../src/sessions/domain';
+import { createSession, findSessionByToken, validateSession } from '../../src/sessions/domain';
 import { upsertFromVatsim } from '../../src/users/domain';
 import { makeVatsimProfile } from '../helpers/fixtures';
 
@@ -26,16 +21,22 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-describe('createSessionToken', () => {
-	it('returns distinct base32 tokens', () => {
-		const a = createSessionToken();
-		const b = createSessionToken();
-		expect(a).toMatch(/^[a-z2-7]{32}$/);
-		expect(a).not.toBe(b);
-	});
-});
-
 describe('createSession', () => {
+	it('sweeps expired sessions, keeping live ones', async () => {
+		const db = makeDb(env.DB);
+		await seedUser(db);
+		const row = { cid: 'u1', createdAt: 1, lastSeenAt: 1 };
+		await db.insert(sessions).values([
+			{ ...row, id: 'expired', expiresAt: Date.now() - 1 },
+			{ ...row, id: 'live', expiresAt: Date.now() + 60_000 }
+		]);
+		await createSession(db, 'u1');
+		const ids = (await db.select({ id: sessions.id }).from(sessions).all()).map((s) => s.id);
+		expect(ids).toHaveLength(2);
+		expect(ids).toContain('live');
+		expect(ids).not.toContain('expired');
+	});
+
 	it('inserts a row keyed by sha256(token), returns raw token', async () => {
 		const db = makeDb(env.DB);
 		await seedUser(db);

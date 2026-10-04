@@ -1,4 +1,3 @@
-// src/oauth/redirect-uri.ts
 import type { DB } from '../db';
 import { IdentityError } from '../errors';
 import { findClient } from '../clients/domain';

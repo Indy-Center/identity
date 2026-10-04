@@ -1,5 +1,5 @@
-// scripts/manage.ts
-// npm run client -- create <id> [--scope users:read] [--scope users:write] [--redirect-uri <url>]… [--local]
+// npm run client -- create <id> [--scope <scope>]… [--redirect-uri <url>]… [--local]
+// npm run client -- update <id> [--scope <scope>]… [--redirect-uri <url>]… [--local]
 // npm run client -- rotate <id> [--local]
 // npm run client -- delete <id> [--local | --yes]
 // npm run client -- list [--local]
@@ -18,11 +18,13 @@ import {
 	grantRoleSql,
 	returnedRowCount,
 	revokeRoleSql,
-	rotateClientSql
+	rotateClientSql,
+	updateClientSql
 } from './manage-sql.ts';
 
 const USAGE = `usage:
-  npm run client -- create <id> [--scope users:read|users:write]… [--redirect-uri <url>]… [--local]
+  npm run client -- create <id> [--scope users:read|users:write|clients:manage]… [--redirect-uri <url>]… [--local]
+  npm run client -- update <id> [--scope …]… [--redirect-uri <url>]… [--local]
   npm run client -- rotate <id> [--local]
   npm run client -- delete <id> [--local | --yes]
   npm run client -- list [--local]
@@ -114,6 +116,18 @@ async function main(): Promise<void> {
 				})
 			);
 			return printSecret(id, secret);
+		}
+		if (action === 'update') {
+			const sql = updateClientSql({
+				id,
+				scopes: values.scope as Scope[],
+				redirectUris: values['redirect-uri'] as string[]
+			});
+			if (returnedRowCount(run(sql)) !== 1) {
+				throw new Error(`no client "${id}" in ${where} id_db; nothing updated`);
+			}
+			console.log(`updated client "${id}" in ${where} id_db`);
+			return;
 		}
 		if (action === 'rotate') {
 			const secret = generateClientSecret(id);

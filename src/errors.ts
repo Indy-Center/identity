@@ -1,4 +1,3 @@
-// src/errors.ts
 // Every HTTP-visible failure outside /oauth/* (which uses RFC 6749 errors).
 export type ErrorCode =
 	| 'not_found'

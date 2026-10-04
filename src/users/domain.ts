@@ -1,4 +1,3 @@
-// src/users/domain.ts
 import { eq } from 'drizzle-orm';
 import { sessions, userRoles, users, type User } from '../schema';
 import type { DB } from '../db';
@@ -32,11 +31,14 @@ export async function getUser(db: DB, cid: string): Promise<User | null> {
 	return (await db.select().from(users).where(eq(users.cid, cid)).get()) ?? null;
 }
 
-export type UserFilter = { role: string } | { discordId: string };
+export type UserFilter = { role: string } | { discordId: string } | { teamspeakUid: string };
 
 export async function listUsers(db: DB, filter: UserFilter): Promise<User[]> {
 	if ('discordId' in filter) {
 		return db.select().from(users).where(eq(users.discordId, filter.discordId)).all();
+	}
+	if ('teamspeakUid' in filter) {
+		return db.select().from(users).where(eq(users.teamspeakUid, filter.teamspeakUid)).all();
 	}
 	const rows = await db
 		.selectDistinct({ user: users })
@@ -53,6 +55,7 @@ export type ProfilePatch = {
 	pronouns?: string | null;
 	operatingInitials?: string | null;
 	discordId?: string | null;
+	teamspeakUid?: string | null;
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -85,7 +88,11 @@ export async function updateProfile(db: DB, cid: string, patch: ProfilePatch): P
 		return row;
 	} catch (err) {
 		if (isUniqueViolation(err)) {
-			throw new IdentityError('conflict', 409, 'discord_id or operating_initials already in use');
+			throw new IdentityError(
+				'conflict',
+				409,
+				'discord_id, teamspeak_uid or operating_initials already in use'
+			);
 		}
 		throw err;
 	}

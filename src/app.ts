@@ -1,11 +1,13 @@
 import { Hono } from 'hono';
 import { openAPIRouteHandler } from 'hono-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
+import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { errorHandler, notFoundHandler } from './error-handler';
 import { loginRoutes, logoutRoutes } from './oauth/login-routes';
 import { oauthRoutes } from './oauth/routes';
-import { apiRoutes } from './users/routes';
+import { authorizationServerMetadata } from './oauth/metadata';
+import { apiRoutes } from './api/routes';
 import { defaultValidationErrorResponse, errorSchemas } from './openapi';
 
 const DOCS_CACHE = 'public, max-age=300';
@@ -21,8 +23,12 @@ export function buildApp() {
 	const app = new Hono<{ Bindings: Cloudflare.Env }>();
 	app.onError(errorHandler);
 	app.notFound(notFoundHandler);
-	// /healthz inlined — single endpoint, doesn't need its own router
 	app.get('/healthz', (c) => c.json({ ok: true }));
+	// Public and the same for every caller, so any origin may read it.
+	app.get('/.well-known/oauth-authorization-server', cors(), (c) => {
+		c.header('Cache-Control', DOCS_CACHE);
+		return c.json(authorizationServerMetadata(new URL(c.req.url).origin));
+	});
 	app.route('/oauth', oauthRoutes);
 	app.route('/login', loginRoutes);
 	app.route('/logout', logoutRoutes);

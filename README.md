@@ -37,7 +37,7 @@ Keep the access token in your own session. Call `/oauth/userinfo` again whenever
 
 Send users to `https://id.flyindycenter.com/logout?return_url=…` to sign out everywhere.
 
-Apps on other domains (Moodle, Wiki.js) must be **registered clients** with exact redirect URIs and a secret; see below.
+Apps on other domains (Moodle, Wiki.js) must be **registered clients** with exact redirect URIs and a secret; see below. Their endpoints are published at [`/.well-known/oauth-authorization-server`](https://id.flyindycenter.com/.well-known/oauth-authorization-server) (RFC 8414). Identity is OAuth 2.0, not OpenID Connect: there is no `id_token`, so configure such apps as a generic OAuth 2 provider and read the user from `/oauth/userinfo`.
 
 ## Call the API from a service
 
@@ -68,12 +68,25 @@ These commands need Cloudflare access, and run against production unless you pas
 ```bash
 npm run client -- create community --scope users:read --scope users:write
 npm run client -- create moodle --redirect-uri https://moodle.flyindycenter.com/admin/oauth2callback.php
+npm run client -- update community --scope users:read   # replaces the scopes (or redirect URIs) you pass; keeps the secret
 npm run client -- rotate community           # new secret; old tokens die immediately
 npm run client -- delete community --yes     # --yes is required against the remote db
 npm run client -- list
 npm run role -- grant 1234567 global:admin   # global:* roles can only be granted/revoked here
 npm run role -- revoke 1234567 global:admin
 ```
+
+A `global:admin` user can do the same over HTTP: `GET` and `POST /api/clients`, `PATCH /api/clients/:id`, `POST /api/clients/:id/rotate`, `DELETE /api/clients/:id` (see [/docs](https://id.flyindycenter.com/docs)). The same rules apply.
+
+### Scopes
+
+Scopes say what a client may do on `/api`: `users:read`, `users:write` (implies read) and `clients:manage`. They are set when the client is registered.
+
+- A service's own token (client-credentials grant) carries its client's scopes.
+- A user's token is capped by the client the user logged in through: an `/api` call needs the user to be `global:admin` **and** that client to hold the scope. A login through a client with no scopes, or an unregistered first-party app, can only read `/oauth/userinfo` and edit its own profile at `/api/me`.
+- `clients:manage` only ever works for a `global:admin` user, never for a service's own token.
+
+So the app admins use to manage identity must be a registered client: `npm run client -- create admin --scope users:write --scope clients:manage --redirect-uri https://…`.
 
 Notes:
 

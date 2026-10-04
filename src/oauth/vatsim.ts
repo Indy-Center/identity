@@ -46,7 +46,7 @@ export type VatsimProfile = z.infer<typeof VatsimProfileSchema>;
 
 const VATSIM_SCOPES = ['full_name', 'vatsim_details', 'email'];
 
-export function buildVatsimClient(env: Cloudflare.Env): OAuth2Client {
+function buildVatsimClient(env: Cloudflare.Env): OAuth2Client {
 	return new OAuth2Client(
 		env.CONNECT_CLIENT_ID,
 		env.CONNECT_CLIENT_SECRET,

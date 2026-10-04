@@ -1,4 +1,3 @@
-// src/incubator/flight-plans/domain.ts
 import { VatsimDataFeedSchema } from './schema';
 import type { FlightPlan } from './types';
 

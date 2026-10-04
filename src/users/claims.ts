@@ -1,4 +1,3 @@
-// src/users/claims.ts
 // The one user serializer. Standard OIDC Core §5.1 claim names where one
 // exists (sub, name, given_name, family_name); snake_case custom claims
 // otherwise. Never includes email or the raw VATSIM profile: /oauth/userinfo
@@ -24,6 +23,7 @@ export const ClaimsSchema = z.object({
 	roles: z.array(z.string()),
 	operating_initials: z.string().nullable(),
 	discord_id: z.string().nullable(),
+	teamspeak_uid: z.string().nullable(),
 	active: z.boolean()
 });
 
@@ -45,6 +45,7 @@ export function toClaims(user: User, roles: string[]): Claims {
 		roles,
 		operating_initials: user.operatingInitials,
 		discord_id: user.discordId,
+		teamspeak_uid: user.teamspeakUid,
 		active: user.active
 	};
 }

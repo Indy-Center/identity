@@ -1,14 +1,106 @@
-// src/clients/domain.ts
 // Registered clients and their client-credentials tokens (RFC 6749 §4.4).
-import { and, eq, gt, lt } from 'drizzle-orm';
+import { and, asc, eq, gt, lt } from 'drizzle-orm';
 import type { DB } from '../db';
 import { clients, clientTokens, SCOPES, type Client, type Scope } from '../schema';
 import { randomBase32, sha256Hex } from '../crypto';
+import { IdentityError } from '../errors';
+import { newClientSecret } from './registration';
 
 export const CLIENT_TOKEN_LIFETIME_MS = 60 * 60 * 1000;
 
 export async function findClient(db: DB, id: string): Promise<Client | null> {
 	return (await db.select().from(clients).where(eq(clients.id, id)).get()) ?? null;
+}
+
+export function listClients(db: DB) {
+	return db
+		.select({
+			id: clients.id,
+			scopes: clients.scopes,
+			redirectUris: clients.redirectUris,
+			createdAt: clients.createdAt
+		})
+		.from(clients)
+		.orderBy(asc(clients.id))
+		.all();
+}
+
+/** Register a client and return its secret, which is stored only as a hash. */
+export async function createClient(
+	db: DB,
+	registration: { id: string; scopes: Scope[]; redirectUris: string[] }
+): Promise<string> {
+	const { id, scopes, redirectUris } = registration;
+	const secret = newClientSecret(id);
+	const [row] = await db
+		.insert(clients)
+		.values({
+			id,
+			secretHash: await sha256Hex(secret),
+			redirectUris: redirectUris.length > 0 ? redirectUris : null,
+			scopes,
+			createdAt: Date.now()
+		})
+		.onConflictDoNothing()
+		.returning({ id: clients.id });
+	if (!row) {
+		throw new IdentityError('conflict', 409, `client ${id} already exists`);
+	}
+	return secret;
+}
+
+/** Give the client a new secret and return it; its outstanding tokens are dropped. */
+export async function rotateClientSecret(db: DB, id: string): Promise<string> {
+	const secret = newClientSecret(id);
+	const [rows] = await db.batch([
+		db
+			.update(clients)
+			.set({ secretHash: await sha256Hex(secret) })
+			.where(eq(clients.id, id))
+			.returning({ id: clients.id }),
+		db.delete(clientTokens).where(eq(clientTokens.clientId, id))
+	]);
+	if (!rows[0]) {
+		throw new IdentityError('not_found', 404, `client ${id} not found`);
+	}
+	return secret;
+}
+
+/**
+ * Replace a client's scopes and/or redirect URIs, keeping its secret. Its
+ * tokens carry the scopes they were issued with, so a scope change drops them.
+ */
+export async function updateClient(
+	db: DB,
+	id: string,
+	patch: { scopes?: Scope[]; redirectUris?: string[] }
+) {
+	const update = db
+		.update(clients)
+		.set({
+			scopes: patch.scopes,
+			redirectUris: patch.redirectUris?.length === 0 ? null : patch.redirectUris
+		})
+		.where(eq(clients.id, id))
+		.returning();
+	const [rows] = patch.scopes
+		? await db.batch([update, db.delete(clientTokens).where(eq(clientTokens.clientId, id))])
+		: [await update];
+	const row = rows[0];
+	if (!row) {
+		throw new IdentityError('not_found', 404, `client ${id} not found`);
+	}
+	return row;
+}
+
+export async function deleteClient(db: DB, id: string): Promise<void> {
+	const [, rows] = await db.batch([
+		db.delete(clientTokens).where(eq(clientTokens.clientId, id)),
+		db.delete(clients).where(eq(clients.id, id)).returning({ id: clients.id })
+	]);
+	if (!rows[0]) {
+		throw new IdentityError('not_found', 404, `client ${id} not found`);
+	}
 }
 
 /** The client if `secret` is its secret, else null. Compares sha256 digests in SQL. */

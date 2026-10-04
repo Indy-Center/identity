@@ -1,10 +1,8 @@
-// test/incubator/presence/domain.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	__resetCacheForTests,
 	ensureFresh,
-	getActiveSession,
-	listByArtcc
+	getActiveSession
 } from '../../../src/incubator/presence/domain';
 import type { OnlineController } from '../../../src/incubator/presence/types';
 
@@ -165,26 +163,6 @@ describe('getActiveSession', () => {
 			})
 		);
 		expect(await getActiveSession('111')).toBeNull();
-	});
-});
-
-describe('listByArtcc', () => {
-	it('returns only controllers in the given ARTCC', async () => {
-		mockFetch([
-			makeController({
-				artccId: 'ZID',
-				vatsimData: { ...makeController().vatsimData, cid: '111' }
-			}),
-			makeController({ artccId: 'ZAU', vatsimData: { ...makeController().vatsimData, cid: '222' } })
-		]);
-		const zid = await listByArtcc('ZID');
-		expect(zid).toHaveLength(1);
-		expect(zid[0]!.vatsimData.cid).toBe('111');
-	});
-
-	it('returns an empty array on cold cache + failed fetch', async () => {
-		vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
-		expect(await listByArtcc('ZID')).toEqual([]);
 	});
 });
 

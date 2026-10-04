@@ -1,31 +1,27 @@
-import { eq } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 import type { DB } from '../db';
 import { sessions, users, type Session } from '../schema';
 import { randomBase32, sha256Hex } from '../crypto';
 
-export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
-export const SESSION_REFRESH_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
-export const LAST_SEEN_WRITE_INTERVAL_MS = 60 * 60 * 1000;
-
-export function createSessionToken(): string {
-	return randomBase32(20);
-}
-
-export async function hashSessionToken(token: string): Promise<string> {
-	return sha256Hex(token);
-}
+const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_REFRESH_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
+const LAST_SEEN_WRITE_INTERVAL_MS = 60 * 60 * 1000;
 
 export async function createSession(
 	db: DB,
-	cid: string
+	cid: string,
+	clientId: string | null = null
 ): Promise<{ token: string; expiresAt: number }> {
 	const now = Date.now();
-	const token = createSessionToken();
-	const id = await hashSessionToken(token);
+	// Opportunistic cleanup of abandoned sessions; there is no cron.
+	await db.delete(sessions).where(lt(sessions.expiresAt, now));
+	const token = randomBase32(20);
+	const id = await sha256Hex(token);
 	const expiresAt = now + SESSION_LIFETIME_MS;
 	await db.insert(sessions).values({
 		id,
 		cid,
+		clientId,
 		expiresAt,
 		createdAt: now,
 		lastSeenAt: now
@@ -34,13 +30,13 @@ export async function createSession(
 }
 
 export async function findSessionByToken(db: DB, token: string): Promise<Session | null> {
-	const id = await hashSessionToken(token);
+	const id = await sha256Hex(token);
 	const row = await db.select().from(sessions).where(eq(sessions.id, id)).get();
 	return row ?? null;
 }
 
 export async function deleteSessionByToken(db: DB, token: string): Promise<void> {
-	const id = await hashSessionToken(token);
+	const id = await sha256Hex(token);
 	await db.delete(sessions).where(eq(sessions.id, id));
 }
 
@@ -50,7 +46,7 @@ export async function deleteAllSessionsForUser(db: DB, cid: string): Promise<voi
 
 export async function validateSession(db: DB, token: string): Promise<Session | null> {
 	const now = Date.now();
-	const id = await hashSessionToken(token);
+	const id = await sha256Hex(token);
 	const row = await db
 		.select({ session: sessions, active: users.active })
 		.from(sessions)

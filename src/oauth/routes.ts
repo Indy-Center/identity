@@ -1,4 +1,3 @@
-// src/oauth/routes.ts
 // OAuth 2.0 authorization-server endpoints (RFC 6749) for Indy Center apps.
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
@@ -26,6 +25,7 @@ import {
 	revokeClientToken
 } from '../clients/domain';
 import { parseClientCredentials } from '../clients/credentials';
+import { bearerToken } from '../api/principal';
 
 type Env = { Bindings: Cloudflare.Env };
 
@@ -57,15 +57,6 @@ function invalidClient(c: Context<Env>) {
 		{ error: 'invalid_client', error_description: 'client authentication failed' },
 		401
 	);
-}
-
-// Bearer-only: cookies (identity's own or any legacy one) are never accepted
-// here, so a value sitting only in a cookie is treated as no token at all.
-const BEARER_PATTERN = /^Bearer\s+(\S+)$/i;
-
-function bearerToken(c: Context<Env>): string {
-	const header = c.req.header('Authorization') ?? '';
-	return header.match(BEARER_PATTERN)?.[1] ?? '';
 }
 
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
@@ -279,7 +270,7 @@ oauthRoutes.get(
 		}
 	}),
 	async (c) => {
-		const token = bearerToken(c);
+		const token = bearerToken(c.req.header('Authorization'));
 		const db = makeDb(c.env.DB);
 		const session = token ? await validateSession(db, token) : null;
 		const user = session ? await getUser(db, session.cid) : null;

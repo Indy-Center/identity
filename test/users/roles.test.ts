@@ -1,4 +1,3 @@
-// test/users/roles.test.ts
 import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDb } from '../../src/db';

@@ -1,4 +1,3 @@
-// test/docs.test.ts
 import { exports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 

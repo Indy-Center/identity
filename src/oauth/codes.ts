@@ -1,4 +1,3 @@
-// src/oauth/codes.ts
 import { eq, lt } from 'drizzle-orm';
 import type { DB } from '../db';
 import { authorizationCodes, users } from '../schema';
@@ -59,5 +58,5 @@ export async function exchangeAuthorizationCode(
 	if (!user || !user.active) {
 		return null;
 	}
-	return { ...(await createSession(db, row.cid)), cid: row.cid };
+	return { ...(await createSession(db, row.cid, clientId)), cid: row.cid };
 }

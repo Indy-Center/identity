@@ -1,4 +1,3 @@
-// src/validation.ts
 // One validator wrapper, so every route reports zod failures in the identity
 // error envelope instead of hono-openapi's default body.
 import type { StandardSchemaV1 } from '@standard-schema/spec';

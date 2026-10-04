@@ -1,4 +1,3 @@
-// test/scripts/manage-sql.test.ts
 import { describe, expect, it } from 'vitest';
 import { sha256Hex } from '../../src/crypto';
 import {
@@ -6,11 +5,11 @@ import {
 	deleteClientSql,
 	generateClientSecret,
 	grantRoleSql,
-	hashSecret,
 	returnedRowCount,
 	revokeRoleSql,
 	rotateClientSql,
-	sqlString
+	sqlString,
+	updateClientSql
 } from '../../scripts/manage-sql';
 
 describe('manage-sql', () => {
@@ -18,11 +17,6 @@ describe('manage-sql', () => {
 		const a = generateClientSecret('community');
 		expect(a).toMatch(/^community_[a-z2-7]{52}$/);
 		expect(generateClientSecret('community')).not.toBe(a);
-	});
-
-	it('hashes secrets exactly as authenticateClient does', async () => {
-		const secret = generateClientSecret('community');
-		expect(await hashSecret(secret)).toBe(await sha256Hex(secret));
 	});
 
 	it('escapes single quotes', () => {
@@ -177,5 +171,25 @@ describe('manage-sql', () => {
 		expect(() => returnedRowCount('{}')).toThrow(/unexpected/);
 		expect(() => returnedRowCount('[{}]')).toThrow(/unexpected/);
 		expect(() => returnedRowCount('not json')).toThrow();
+	});
+
+	it('update replaces only the lists given, dropping tokens on a scope change', () => {
+		expect(updateClientSql({ id: 'bot', scopes: ['users:read'], redirectUris: [] })).toBe(
+			`UPDATE clients SET scopes = '["users:read"]' WHERE id = 'bot' RETURNING id; DELETE FROM client_tokens WHERE client_id = 'bot';`
+		);
+		expect(
+			updateClientSql({ id: 'bot', scopes: [], redirectUris: ['https://b.example.org/cb'] })
+		).toBe(
+			`UPDATE clients SET redirect_uris = '["https://b.example.org/cb"]' WHERE id = 'bot' RETURNING id;`
+		);
+		expect(() => updateClientSql({ id: 'bot', scopes: [], redirectUris: [] })).toThrow(
+			/nothing to update/
+		);
+		expect(() =>
+			updateClientSql({ id: 'bot', scopes: ['nope' as never], redirectUris: [] })
+		).toThrow(/scope/);
+		expect(() => updateClientSql({ id: "b'ot", scopes: ['users:read'], redirectUris: [] })).toThrow(
+			/client id/
+		);
 	});
 });

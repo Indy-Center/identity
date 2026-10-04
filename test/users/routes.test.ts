@@ -1,4 +1,3 @@
-// test/users/routes.test.ts
 import { env, exports } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDb } from '../../src/db';
@@ -26,11 +25,11 @@ async function clientToken(id: string, scopes: Scope[]): Promise<string> {
 	return (await issueClientToken(db(), id, scopes)).token;
 }
 
-async function userToken(cid: string, roles: string[] = []): Promise<string> {
+async function userToken(cid: string, roles: string[] = [], clientId?: string): Promise<string> {
 	for (const role of roles) {
 		await db().insert(userRoles).values({ cid, role, source: 'cli', grantedAt: 1 });
 	}
-	return (await createSession(db(), cid)).token;
+	return (await createSession(db(), cid, clientId)).token;
 }
 
 function api(method: string, path: string, token: string, body?: unknown) {
@@ -71,7 +70,7 @@ describe('GET /api/users', () => {
 		expect(res.headers.get('Access-Control-Allow-Credentials')).toBeNull();
 	});
 
-	it('lists by role or discord_id, requiring exactly one filter', async () => {
+	it('lists by role, discord_id or teamspeak_uid, requiring exactly one filter', async () => {
 		const token = await clientToken('bot', ['users:read', 'users:write']);
 		await api('PATCH', '/users/2', token, { discord_id: '222222222222222222' });
 		await api('PATCH', '/users/1/roles', token, { add: ['community:admin'] });
@@ -88,6 +87,14 @@ describe('GET /api/users', () => {
 			sub: string;
 		}[];
 		expect(byDiscord.map((u) => u.sub)).toEqual(['2']);
+		const tsUid = 'AbCdEfGhIjKlMnOpQrStUvWx+/0=';
+		expect((await api('PATCH', '/users/1', token, { teamspeak_uid: tsUid })).status).toBe(200);
+		expect((await api('PATCH', '/users/2', token, { teamspeak_uid: tsUid })).status).toBe(409);
+		expect((await api('PATCH', '/users/2', token, { teamspeak_uid: 'nope' })).status).toBe(400);
+		const byTeamspeak = (await (
+			await api('GET', `/users?teamspeak_uid=${encodeURIComponent(tsUid)}`, token)
+		).json()) as { sub: string; teamspeak_uid: string }[];
+		expect(byTeamspeak).toMatchObject([{ sub: '1', teamspeak_uid: tsUid }]);
 		expect(await errorCode(await api('GET', '/users', token))).toBe('validation_failed');
 		expect(await errorCode(await api('GET', '/users?role=a:b&discord_id=1', token))).toBe(
 			'validation_failed'
@@ -277,7 +284,8 @@ describe('users as principals', () => {
 	});
 
 	it('a global:admin user can edit others, with role writes sourced user:<cid>', async () => {
-		const admin = await userToken('1', ['global:admin']);
+		await seedClient(db(), 'admin-tool', { scopes: ['users:write'] });
+		const admin = await userToken('1', ['global:admin'], 'admin-tool');
 		expect((await api('PATCH', '/users/2', admin, { pronouns: 'she/her' })).status).toBe(200);
 		await api('PATCH', '/users/2/roles', admin, { add: ['events:can_sign_up'] });
 		expect(await listRoleGrants(db(), '2')).toEqual([

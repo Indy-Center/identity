@@ -1,4 +1,3 @@
-// src/users/roles.ts
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { z } from 'zod';

@@ -1,16 +1,15 @@
-// scripts/manage-sql.ts
 // Pure builders for scripts/manage.ts. Kept free of node: imports and
 // extension-less paths so both Node (type stripping) and the workers test pool
 // can import it.
-import { randomBase32, sha256Hex } from '../src/crypto.ts';
-import { LOOPBACK, REDIRECT_URI_MAX_LENGTH } from '../src/oauth/redirect-uri-rules.ts';
+import { sha256Hex } from '../src/crypto.ts';
+import {
+	clientIdProblem,
+	newClientSecret,
+	redirectUriProblem
+} from '../src/clients/registration.ts';
 import { SCOPES, type Scope } from '../src/schema.ts';
 import { ROLE_NAME } from '../src/users/role-name.ts';
 
-const CLIENT_ID = /^[a-z0-9-]+$/;
-// `cli` is the role source for grants made here; a client with that id could
-// otherwise remove global:* rows through the API.
-const RESERVED_CLIENT_IDS = new Set(['cli']);
 // VATSIM CIDs: positive integers, no leading zeros (so '01' can't shadow '1').
 const CID = /^[1-9]\d{0,9}$/;
 
@@ -19,11 +18,9 @@ export function sqlString(value: string): string {
 }
 
 function assertClientId(id: string): void {
-	if (!CLIENT_ID.test(id)) {
-		throw new Error(`invalid client id "${id}": use lowercase letters, digits and dashes`);
-	}
-	if (RESERVED_CLIENT_IDS.has(id)) {
-		throw new Error(`invalid client id "${id}": reserved`);
+	const problem = clientIdProblem(id);
+	if (problem) {
+		throw new Error(`invalid client id "${id}": ${problem}`);
 	}
 }
 
@@ -33,48 +30,24 @@ function assertTimestamp(now: number): void {
 	}
 }
 
-/**
- * A redirect URI a registered client may use: an absolute https URL (or http on
- * loopback, as for the allowlist), no userinfo, no fragment (RFC 6749 §3.1.2),
- * no whitespace or control characters, at most REDIRECT_URI_MAX_LENGTH long.
- */
 function assertRedirectUri(uri: string): void {
-	const fail = (why: string) => {
-		throw new Error(`invalid redirect uri "${uri}": ${why}`);
-	};
-	if (uri.length > REDIRECT_URI_MAX_LENGTH) {
-		fail(`longer than ${REDIRECT_URI_MAX_LENGTH} characters`);
-	}
-	if (/[\s\p{Cc}]/u.test(uri)) {
-		fail('contains whitespace or control characters');
-	}
-	if (uri.includes('#')) {
-		fail('must not contain a fragment');
-	}
-	let url: URL;
-	try {
-		url = new URL(uri);
-	} catch {
-		return fail('not an absolute URL');
-	}
-	if (url.username || url.password) {
-		fail('must not contain credentials');
-	}
-	const https = url.protocol === 'https:' && uri.startsWith('https://') && url.hostname !== '';
-	if (!https && !LOOPBACK.test(uri)) {
-		fail('must be https (http only on localhost, 127.0.0.1 or [::1])');
+	const problem = redirectUriProblem(uri);
+	if (problem) {
+		throw new Error(`invalid redirect uri "${uri}": ${problem}`);
 	}
 }
 
-/** `<id>_<52 base32 chars>`: 32 random bytes, prefixed for readability. */
+function assertScopes(scopes: string[]): void {
+	for (const s of scopes) {
+		if (!(SCOPES as readonly string[]).includes(s)) {
+			throw new Error(`unknown scope "${s}" (valid: ${SCOPES.join(', ')})`);
+		}
+	}
+}
+
 export function generateClientSecret(id: string): string {
 	assertClientId(id);
-	return `${id}_${randomBase32(32)}`;
-}
-
-/** What `clients.secret_hash` stores; `authenticateClient` compares against it. */
-export function hashSecret(secret: string): Promise<string> {
-	return sha256Hex(secret);
+	return newClientSecret(id);
 }
 
 export async function createClientSql(opts: {
@@ -86,11 +59,7 @@ export async function createClientSql(opts: {
 }): Promise<string> {
 	assertClientId(opts.id);
 	assertTimestamp(opts.now);
-	for (const s of opts.scopes) {
-		if (!(SCOPES as readonly string[]).includes(s)) {
-			throw new Error(`unknown scope "${s}" (valid: ${SCOPES.join(', ')})`);
-		}
-	}
+	assertScopes(opts.scopes);
 	opts.redirectUris.forEach(assertRedirectUri);
 	if (opts.scopes.length === 0 && opts.redirectUris.length === 0) {
 		throw new Error(
@@ -99,7 +68,7 @@ export async function createClientSql(opts: {
 	}
 	const redirect =
 		opts.redirectUris.length > 0 ? sqlString(JSON.stringify(opts.redirectUris)) : 'NULL';
-	return `INSERT INTO clients (id, secret_hash, redirect_uris, scopes, created_at) VALUES (${sqlString(opts.id)}, ${sqlString(await hashSecret(opts.secret))}, ${redirect}, ${sqlString(JSON.stringify(opts.scopes))}, ${opts.now});`;
+	return `INSERT INTO clients (id, secret_hash, redirect_uris, scopes, created_at) VALUES (${sqlString(opts.id)}, ${sqlString(await sha256Hex(opts.secret))}, ${redirect}, ${sqlString(JSON.stringify(opts.scopes))}, ${opts.now});`;
 }
 
 // rotate, delete and revoke end their main statement in RETURNING so the CLI
@@ -113,7 +82,35 @@ export async function createClientSql(opts: {
  */
 export async function rotateClientSql(id: string, secret: string): Promise<string> {
 	assertClientId(id);
-	return `UPDATE clients SET secret_hash = ${sqlString(await hashSecret(secret))} WHERE id = ${sqlString(id)} RETURNING id; DELETE FROM client_tokens WHERE client_id = ${sqlString(id)};`;
+	return `UPDATE clients SET secret_hash = ${sqlString(await sha256Hex(secret))} WHERE id = ${sqlString(id)} RETURNING id; DELETE FROM client_tokens WHERE client_id = ${sqlString(id)};`;
+}
+
+/**
+ * Replace whichever of scopes and redirect URIs is non-empty, keeping the
+ * secret. A scope change drops the tokens issued under the old scopes.
+ */
+export function updateClientSql(opts: {
+	id: string;
+	scopes: Scope[];
+	redirectUris: string[];
+}): string {
+	assertClientId(opts.id);
+	assertScopes(opts.scopes);
+	opts.redirectUris.forEach(assertRedirectUri);
+	const sets: string[] = [];
+	if (opts.scopes.length > 0) {
+		sets.push(`scopes = ${sqlString(JSON.stringify(opts.scopes))}`);
+	}
+	if (opts.redirectUris.length > 0) {
+		sets.push(`redirect_uris = ${sqlString(JSON.stringify(opts.redirectUris))}`);
+	}
+	if (sets.length === 0) {
+		throw new Error('nothing to update: pass at least one --scope or --redirect-uri');
+	}
+	const id = sqlString(opts.id);
+	const dropTokens =
+		opts.scopes.length > 0 ? ` DELETE FROM client_tokens WHERE client_id = ${id};` : '';
+	return `UPDATE clients SET ${sets.join(', ')} WHERE id = ${id} RETURNING id;${dropTokens}`;
 }
 
 export function deleteClientSql(id: string): string {

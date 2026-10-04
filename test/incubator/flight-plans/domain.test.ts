@@ -1,4 +1,3 @@
-// test/incubator/flight-plans/domain.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	__resetCacheForTests,

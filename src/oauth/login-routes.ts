@@ -16,18 +16,6 @@ export const loginRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
-// Bundles every required piece of input on the OAuth callback: the `code`
-// and `state` from VATSIM's redirect query, plus the `oauth_state` cookie
-// written by /oauth/authorize. The .refine() enforces CSRF protection — the
-// state in the query must match the state in the cookie.
-const CallbackInputSchema = z
-	.object({
-		code: z.string().min(1),
-		state: z.string().min(1),
-		stateCookie: z.string().min(1)
-	})
-	.refine((d) => d.state === d.stateCookie, { message: 'state cookie mismatch' });
-
 // The authorize request /oauth/authorize stored in __Host-oauth_return. Its
 // redirectUri is re-checked against the client in the handler.
 const ReturnCookieSchema = z.object({
@@ -49,15 +37,12 @@ function parseReturnCookie(raw: string | undefined): z.infer<typeof ReturnCookie
 }
 
 loginRoutes.get('/callback', async (c) => {
-	const parsed = CallbackInputSchema.safeParse({
-		code: c.req.query('code'),
-		state: c.req.query('state'),
-		stateCookie: getCookie(c, 'oauth_state', 'host')
-	});
-	if (!parsed.success) {
+	const code = c.req.query('code');
+	const vatsimState = c.req.query('state');
+	// CSRF: the state VATSIM echoes back must match the cookie /oauth/authorize set.
+	if (!code || !vatsimState || vatsimState !== getCookie(c, 'oauth_state', 'host')) {
 		throw new IdentityError('invalid_state', 400, 'OAuth state cookie missing or mismatched');
 	}
-	const { code } = parsed.data;
 	const db = makeDb(c.env.DB);
 	const authorizeRequest = parseReturnCookie(getCookie(c, 'oauth_return', 'host'));
 	// Re-check the redirect now, not just at /oauth/authorize: the cookie is
