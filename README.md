@@ -37,7 +37,7 @@ Keep the access token in your own session. Call `/oauth/userinfo` again whenever
 
 Send users to `https://id.flyindycenter.com/logout?return_url=…` to sign out everywhere.
 
-A signed-in person can open [`/me`](https://id.flyindycenter.com/me) in their browser to see their own record. It reads identity's cookie, so it needs no token, and it is read-only.
+A signed-in person can open [`/me`](https://id.flyindycenter.com/me) in their browser to see their own record, exactly as `/oauth/userinfo` returns it. It reads identity's cookie, so it needs no token, and it is read-only.
 
 Apps on other domains (Moodle, Wiki.js) must be **registered clients** with exact redirect URIs and a secret; see below. Their endpoints are published at [`/.well-known/oauth-authorization-server`](https://id.flyindycenter.com/.well-known/oauth-authorization-server) (RFC 8414). Identity is OAuth 2.0, not OpenID Connect: there is no `id_token`, so configure such apps as a generic OAuth 2 provider and read the user from `/oauth/userinfo`.
 

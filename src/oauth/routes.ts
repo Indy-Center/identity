@@ -11,11 +11,8 @@ import { logEvent } from '../log';
 import { buildAuthorizationUrl } from './vatsim';
 import { deleteSessionByToken, validateSession } from '../sessions/domain';
 import { getUser } from '../users/domain';
-import { listRoles } from '../users/roles';
-import { toClaims } from '../users/claims';
-import { getActiveSession } from '../incubator/presence/domain';
-import { getFlightPlan } from '../incubator/flight-plans/domain';
 import { createAuthorizationCode, exchangeAuthorizationCode } from './codes';
+import { userinfo } from './userinfo';
 import { buildRedirectWithCode, isAllowedOrigin, redirectAllowedFor } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
 import {
@@ -284,18 +281,8 @@ oauthRoutes.get(
 			c.header('WWW-Authenticate', 'Bearer error="invalid_token"');
 			return c.json({ error: 'invalid_token' }, 401);
 		}
-		const [roles, activeSession, activeFlightPlan] = await Promise.all([
-			listRoles(db, user.cid),
-			getActiveSession(user.cid),
-			getFlightPlan(user.cid)
-		]);
 		c.header('Cache-Control', 'no-store');
-		return c.json({
-			...toClaims(user, roles),
-			email: user.email,
-			active_session: activeSession,
-			active_flight_plan: activeFlightPlan
-		});
+		return c.json(await userinfo(db, user));
 	}
 );
 

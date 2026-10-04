@@ -10,11 +10,10 @@ import {
 	validateSession
 } from '../sessions/domain';
 import { getUser, upsertFromVatsim } from '../users/domain';
-import { listRoles } from '../users/roles';
-import { toClaims } from '../users/claims';
 import { IdentityError } from '../errors';
 import { logEvent } from '../log';
 import { createAuthorizationCode } from './codes';
+import { userinfo } from './userinfo';
 import { buildRedirectWithCode, redirectAllowedFor, validateReturnUrl } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
 
@@ -150,5 +149,5 @@ meRoutes.get('/', async (c) => {
 			'not signed in: log in through an Indy Center app first'
 		);
 	}
-	return c.json({ ...toClaims(user, await listRoles(db, user.cid)), email: user.email });
+	return c.json(await userinfo(db, user));
 });

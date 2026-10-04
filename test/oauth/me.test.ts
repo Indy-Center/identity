@@ -1,5 +1,5 @@
 import { env, exports } from 'cloudflare:workers';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDb } from '../../src/db';
 import { sessions, userRoles, users } from '../../src/schema';
 import { createSession } from '../../src/sessions/domain';
@@ -14,6 +14,12 @@ beforeEach(async () => {
 		await db().delete(t);
 	}
 	await upsertFromVatsim(db(), makeVatsimProfile({ cid: '1' }));
+	// The VATSIM activity feeds: offline here, so both lookups degrade to null.
+	vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+});
+
+afterEach(() => {
+	vi.restoreAllMocks();
 });
 
 const withCookie = (token: string, headers: Record<string, string> = {}) =>
@@ -29,7 +35,10 @@ describe('GET /me', () => {
 		expect(res.status).toBe(200);
 		expect(res.headers.get('Cache-Control')).toBe('no-store');
 		expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
-		expect(await res.json()).toMatchObject({ sub: '1', email: 'test@example.com', roles: ['a:b'] });
+		const body = await res.json();
+		expect(body).toMatchObject({ sub: '1', email: 'test@example.com', roles: ['a:b'] });
+		expect(body).toHaveProperty('active_session');
+		expect(body).toHaveProperty('active_flight_plan');
 	});
 
 	it('401 with no cookie, a bad cookie, a bearer token alone, or a disabled user', async () => {
