@@ -6,6 +6,7 @@ import { exchangeCodeForToken, fetchVatsimProfile } from './vatsim';
 import { createSession, deleteAllSessionsForUser, findSessionByToken } from '../sessions/domain';
 import { upsertFromVatsim } from '../users/domain';
 import { IdentityError } from '../errors';
+import { logEvent } from '../log';
 import { createAuthorizationCode } from './codes';
 import { buildRedirectWithCode, redirectAllowedFor, validateReturnUrl } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
@@ -70,12 +71,14 @@ loginRoutes.get('/callback', async (c) => {
 	const profile = await fetchVatsimProfile(c.env.CONNECT_BASE_URL, accessToken);
 	const user = await upsertFromVatsim(db, profile);
 	if (!user.active) {
+		logEvent('login_denied', { cid: user.cid, reason: 'disabled' });
 		throw new IdentityError('access_denied', 403, 'account disabled');
 	}
 
 	// Mint the code before writing any cookies: if D1 fails here, the browser
 	// is left with no half-applied session or state cookies.
 	const { redirectUri, clientId, state } = authorizeRequest;
+	logEvent('login', { cid: user.cid, client_id: clientId, via: 'vatsim' });
 	const { code: authorizationCode } = await createAuthorizationCode(
 		db,
 		user.cid,
@@ -111,6 +114,7 @@ logoutRoutes.get('/', async (c) => {
 		const session = await findSessionByToken(db, token);
 		if (session) {
 			await deleteAllSessionsForUser(db, session.cid);
+			logEvent('logout', { cid: session.cid });
 		}
 	}
 

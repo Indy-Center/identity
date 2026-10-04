@@ -117,6 +117,8 @@ npm test && npm run typecheck && npm run format:check
 
 Pushing to `main` applies D1 migrations to `id_db` and deploys the `id` Worker.
 
+Workers Logs are on (`observability` in `wrangler.jsonc`): every request is recorded, and logins, token grants, failed client authentication, logouts, user and role changes, and client changes each log one structured line (`event`, plus `cid`, `client_id` or `by`). Watch live with `npx wrangler tail id`, or query in the Cloudflare dashboard under the Worker's Logs tab.
+
 Production needs the `CONNECT_CLIENT_ID` / `CONNECT_CLIENT_SECRET` secrets set on the `id` Worker: `npx wrangler secret put CONNECT_CLIENT_ID --name id` (and the same for `CONNECT_CLIENT_SECRET`).
 
 ## Migrating from auth.flyindycenter.com

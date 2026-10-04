@@ -5,6 +5,7 @@
   "account_id": "afd63515948c9b2188ce14ef1504b2c1",
   "compatibility_date": "2026-04-29",
   "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
   "vars": {
     "CONNECT_BASE_URL": "https://auth.vatsim.net",
     "CONNECT_CALLBACK_URL": "https://id.flyindycenter.com/login/callback"

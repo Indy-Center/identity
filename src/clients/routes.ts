@@ -4,9 +4,10 @@ import { Hono } from 'hono';
 import { describeRoute } from 'hono-openapi';
 import { z } from 'zod';
 import { makeDb } from '../db';
+import { logEvent } from '../log';
 import { validate } from '../validation';
 import { errors, ok } from '../openapi';
-import { requireAdmin, type ApiEnv } from '../api/principal';
+import { requireAdmin, roleSource, type ApiEnv } from '../api/principal';
 import { SCOPES } from '../schema';
 import {
 	createClient,
@@ -104,6 +105,7 @@ clientRoutes.post(
 			scopes: body.scopes,
 			redirectUris: body.redirect_uris
 		});
+		logEvent('client_created', { client_id: body.client_id, by: roleSource(c.var.principal) });
 		return c.json({ client_id: body.client_id, client_secret: secret }, 201);
 	}
 );
@@ -127,6 +129,7 @@ clientRoutes.patch(
 			scopes: body.scopes,
 			redirectUris: body.redirect_uris
 		});
+		logEvent('client_updated', { client_id: row.id, by: roleSource(c.var.principal) });
 		return c.json(toJson(row));
 	}
 );
@@ -144,7 +147,9 @@ clientRoutes.post(
 	validate('param', IdParam),
 	async (c) => {
 		const { id } = c.req.valid('param');
-		return c.json({ client_id: id, client_secret: await rotateClientSecret(makeDb(c.env.DB), id) });
+		const secret = await rotateClientSecret(makeDb(c.env.DB), id);
+		logEvent('client_rotated', { client_id: id, by: roleSource(c.var.principal) });
+		return c.json({ client_id: id, client_secret: secret });
 	}
 );
 
@@ -159,7 +164,9 @@ clientRoutes.delete(
 	requireAdmin,
 	validate('param', IdParam),
 	async (c) => {
-		await deleteClient(makeDb(c.env.DB), c.req.valid('param').id);
+		const { id } = c.req.valid('param');
+		await deleteClient(makeDb(c.env.DB), id);
+		logEvent('client_deleted', { client_id: id, by: roleSource(c.var.principal) });
 		return c.body(null, 204);
 	}
 );

@@ -5,6 +5,7 @@ import { describeRoute } from 'hono-openapi';
 import { z } from 'zod';
 import { makeDb } from '../db';
 import { IdentityError } from '../errors';
+import { logEvent } from '../log';
 import { validate } from '../validation';
 import { errors, ok } from '../openapi';
 import { requireScope, roleSource, type ApiEnv } from '../api/principal';
@@ -159,6 +160,7 @@ userRoutes.patch(
 		if (body.active !== undefined) {
 			user = await setUserActive(db, cid, body.active, { reason: body.disabled_reason });
 		}
+		logEvent('user_updated', { cid, by: roleSource(c.var.principal), fields: Object.keys(body) });
 		return c.json(await claimsFor(db, user));
 	}
 );
@@ -202,6 +204,11 @@ userRoutes.patch(
 			roleSource(c.var.principal),
 			c.req.valid('json')
 		);
+		logEvent('roles_patched', {
+			cid: c.req.valid('param').cid,
+			by: roleSource(c.var.principal),
+			...c.req.valid('json')
+		});
 		return c.json({ roles });
 	}
 );

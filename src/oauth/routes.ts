@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { makeDb } from '../db';
 import { randomBase32 } from '../crypto';
 import { IdentityError } from '../errors';
+import { logEvent } from '../log';
 import { buildAuthorizationUrl } from './vatsim';
 import { deleteSessionByToken, validateSession } from '../sessions/domain';
 import { getUser } from '../users/domain';
@@ -51,6 +52,7 @@ function oauthError(c: Context<Env>, error: string, description: string) {
 
 // RFC 6749 §5.2: failed client authentication is a 401 with a challenge.
 function invalidClient(c: Context<Env>) {
+	logEvent('client_auth_failed');
 	c.header('Cache-Control', 'no-store');
 	c.header('WWW-Authenticate', 'Basic realm="identity"');
 	return c.json(
@@ -110,6 +112,7 @@ oauthRoutes.get(
 			const session = await validateSession(db, existing);
 			if (session) {
 				const { code } = await createAuthorizationCode(db, session.cid, redirectUri, clientId);
+				logEvent('login', { cid: session.cid, client_id: clientId, via: 'sso' });
 				clearLegacySessionCookie(c);
 				return c.redirect(buildRedirectWithCode(redirectUri, code, state), 302);
 			}
@@ -204,6 +207,7 @@ oauthRoutes.post(
 				return oauthError(c, 'invalid_scope', 'requested scope exceeds what this client may have');
 			}
 			const issued = await issueClientToken(db, client.id, scopes);
+			logEvent('token_issued', { grant: 'client_credentials', client_id: client.id, scopes });
 			return c.json({
 				access_token: issued.token,
 				token_type: 'Bearer',
@@ -250,6 +254,7 @@ oauthRoutes.post(
 				'authorization code is invalid, expired, or was issued for a different redirect_uri or client'
 			);
 		}
+		logEvent('token_issued', { grant: 'authorization_code', client_id: clientId, cid: minted.cid });
 		return c.json({
 			access_token: minted.token,
 			token_type: 'Bearer',
