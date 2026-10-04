@@ -30,5 +30,7 @@ export const PilotSchema = z.looseObject({
 });
 
 export const VatsimDataFeedSchema = z.looseObject({
-	pilots: z.array(PilotSchema)
+	pilots: z.array(PilotSchema),
+	// Plans filed by members who are not connected yet. Same shape as a pilot.
+	prefiles: z.array(PilotSchema).default([])
 });

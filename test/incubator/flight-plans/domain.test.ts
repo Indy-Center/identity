@@ -30,10 +30,10 @@ function makePilot(cid: number, fp?: FlightPlan | null): Pilot {
 	};
 }
 
-function mockFeed(pilots: Pilot[]) {
+function mockFeed(pilots: Pilot[], prefiles: Pilot[] = []) {
 	return vi.spyOn(globalThis, 'fetch').mockImplementation(
 		async () =>
-			new Response(JSON.stringify({ pilots }), {
+			new Response(JSON.stringify({ pilots, prefiles }), {
 				status: 200,
 				headers: { 'content-type': 'application/json' }
 			})
@@ -162,5 +162,20 @@ describe('feed timeout', () => {
 		timer.abort(new DOMException('timed out', 'TimeoutError'));
 		expect(await pending).toBeNull();
 		expect(timeout).toHaveBeenCalledWith(2000);
+	});
+});
+
+describe('prefiles', () => {
+	it('returns a plan filed by a member who is not connected', async () => {
+		mockFeed([], [makePilot(42, makeFlightPlan({ departure: 'KCMH', arrival: 'KBOS' }))]);
+		expect(await getFlightPlan('42')).toMatchObject({ departure: 'KCMH', arrival: 'KBOS' });
+	});
+
+	it("prefers the connected pilot's plan over a prefile for the same member", async () => {
+		mockFeed(
+			[makePilot(42, makeFlightPlan({ arrival: 'KORD' }))],
+			[makePilot(42, makeFlightPlan({ arrival: 'KBOS' }))]
+		);
+		expect(await getFlightPlan('42')).toMatchObject({ arrival: 'KORD' });
 	});
 });

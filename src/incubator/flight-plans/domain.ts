@@ -25,7 +25,8 @@ async function fetchAndParse(): Promise<Map<string, FlightPlan> | null> {
 			return null;
 		}
 		const byCid = new Map<string, FlightPlan>();
-		for (const p of parsed.data.pilots) {
+		// Prefiles first, so a connected pilot's plan wins over an older prefile.
+		for (const p of [...parsed.data.prefiles, ...parsed.data.pilots]) {
 			if (p.flight_plan) {
 				byCid.set(String(p.cid), p.flight_plan);
 			}
