@@ -43,6 +43,8 @@ export const OnlineControllerSchema = z.looseObject({
 	vatsimData: VnasVatsimDataSchema
 });
 
+export type OnlineController = z.infer<typeof OnlineControllerSchema>;
+
 export const VnasControllerResponseSchema = z.looseObject({
 	controllers: z.array(OnlineControllerSchema)
 });

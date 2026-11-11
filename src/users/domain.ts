@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { sessions, userRoles, users, type User } from '../schema';
 import type { DB } from '../db';
 import type { VatsimProfile } from '../oauth/vatsim';
@@ -40,13 +40,12 @@ export async function listUsers(db: DB, filter: UserFilter): Promise<User[]> {
 	if ('teamspeakUid' in filter) {
 		return db.select().from(users).where(eq(users.teamspeakUid, filter.teamspeakUid)).all();
 	}
-	const rows = await db
-		.selectDistinct({ user: users })
-		.from(users)
-		.innerJoin(userRoles, eq(userRoles.cid, users.cid))
-		.where(eq(userRoles.role, filter.role))
-		.all();
-	return rows.map((r) => r.user);
+	// A subquery, not a join: several sources may grant one user the same role.
+	const holders = db
+		.select({ cid: userRoles.cid })
+		.from(userRoles)
+		.where(eq(userRoles.role, filter.role));
+	return db.select().from(users).where(inArray(users.cid, holders)).all();
 }
 
 // Identity-owned profile fields. `null` clears a field; `undefined` leaves it.

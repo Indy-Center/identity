@@ -13,7 +13,7 @@ import { deleteSessionByToken, validateSession } from '../sessions/domain';
 import { getUser } from '../users/domain';
 import { createAuthorizationCode, exchangeAuthorizationCode } from './codes';
 import { userinfo } from './userinfo';
-import { buildRedirectWithCode, isAllowedOrigin, redirectAllowedFor } from './redirect-uri';
+import { buildRedirectWithCode, isAllowedRedirectUri, redirectAllowedFor } from './redirect-uri';
 import { clearLegacySessionCookie } from './legacy-cookie';
 import {
 	authenticateClient,
@@ -30,32 +30,28 @@ type Env = { Bindings: Cloudflare.Env };
 export const oauthRoutes = new Hono<Env>();
 
 // Browser-only apps call /oauth/* directly with a bearer token. Reflect only
-// allowlisted origins; no credentials, since nothing here reads a cookie
-// cross-origin.
+// allowlisted origins (the same rules as redirect URIs, which match a bare
+// origin too); no credentials, since nothing here reads a cookie cross-origin.
 oauthRoutes.use(
 	'*',
 	cors({
-		origin: (origin) => (isAllowedOrigin(origin) ? origin : null),
+		origin: (origin) => (isAllowedRedirectUri(origin) ? origin : null),
 		allowMethods: ['GET', 'POST', 'OPTIONS'],
 		allowHeaders: ['Authorization', 'Content-Type']
 	})
 );
 
 // RFC 6749 §5.2 error body.
-function oauthError(c: Context<Env>, error: string, description: string) {
+function oauthError(c: Context<Env>, error: string, description: string, status: 400 | 401 = 400) {
 	c.header('Cache-Control', 'no-store');
-	return c.json({ error, error_description: description }, 400);
+	return c.json({ error, error_description: description }, status);
 }
 
 // RFC 6749 §5.2: failed client authentication is a 401 with a challenge.
 function invalidClient(c: Context<Env>) {
 	logEvent('client_auth_failed');
-	c.header('Cache-Control', 'no-store');
 	c.header('WWW-Authenticate', 'Basic realm="identity"');
-	return c.json(
-		{ error: 'invalid_client', error_description: 'client authentication failed' },
-		401
-	);
+	return oauthError(c, 'invalid_client', 'client authentication failed', 401);
 }
 
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
@@ -80,11 +76,7 @@ oauthRoutes.get(
 	async (c) => {
 		// Every failure here is a 400 to the browser, never a redirect to an
 		// unvalidated URI.
-		const parsed = AuthorizeQuerySchema.safeParse({
-			response_type: c.req.query('response_type'),
-			client_id: c.req.query('client_id'),
-			state: c.req.query('state')
-		});
+		const parsed = AuthorizeQuerySchema.safeParse(c.req.query());
 		if (!parsed.success) {
 			throw new IdentityError(
 				'validation_failed',
@@ -108,7 +100,7 @@ oauthRoutes.get(
 		if (existing) {
 			const session = await validateSession(db, existing);
 			if (session) {
-				const { code } = await createAuthorizationCode(db, session.cid, redirectUri, clientId);
+				const code = await createAuthorizationCode(db, session.cid, redirectUri, clientId);
 				logEvent('login', { cid: session.cid, client_id: clientId, via: 'sso' });
 				clearLegacySessionCookie(c);
 				return c.redirect(buildRedirectWithCode(redirectUri, code, state), 302);
@@ -129,15 +121,14 @@ oauthRoutes.get(
 	}
 );
 
-// Hono's own c.req.parseBody() re-checks Content-Type against the raw header
-// case-sensitively, so it silently returns {} for a body whose Content-Type
-// we've already accepted case-insensitively below. Parse the form ourselves
-// instead of relying on it.
 function isFormContentType(c: Context<Env>): boolean {
 	const contentType = (c.req.header('Content-Type') ?? '').toLowerCase();
 	return contentType.startsWith('application/x-www-form-urlencoded');
 }
 
+// Hono's own c.req.parseBody() re-checks Content-Type against the raw header
+// case-sensitively, so it silently returns {} for a body whose Content-Type
+// isFormContentType accepted case-insensitively. Parse the form ourselves.
 async function parseFormBody(c: Context<Env>): Promise<Record<string, string>> {
 	const form = await c.req.formData();
 	return Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v)]));
@@ -230,13 +221,11 @@ oauthRoutes.post(
 		}
 		// Registered clients must authenticate; an unregistered client_id is a
 		// first-party public client and must not present a secret.
-		const registered = await findClient(db, clientId);
-		if (registered || credentials) {
-			const ok =
-				registered && credentials && (await authenticateClient(db, clientId, credentials.secret));
-			if (!ok) {
-				return invalidClient(c);
-			}
+		const authenticated = credentials
+			? await authenticateClient(db, clientId, credentials.secret)
+			: !(await findClient(db, clientId));
+		if (!authenticated) {
+			return invalidClient(c);
 		}
 		const minted = await exchangeAuthorizationCode(
 			db,
@@ -276,12 +265,11 @@ oauthRoutes.get(
 		const db = makeDb(c.env.DB);
 		const session = token ? await validateSession(db, token) : null;
 		const user = session ? await getUser(db, session.cid) : null;
+		c.header('Cache-Control', 'no-store');
 		if (!user) {
-			c.header('Cache-Control', 'no-store');
 			c.header('WWW-Authenticate', 'Bearer error="invalid_token"');
 			return c.json({ error: 'invalid_token' }, 401);
 		}
-		c.header('Cache-Control', 'no-store');
 		return c.json(await userinfo(db, user));
 	}
 );

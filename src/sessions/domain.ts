@@ -3,7 +3,7 @@ import type { DB } from '../db';
 import { sessions, users, type Session } from '../schema';
 import { randomBase32, sha256Hex } from '../crypto';
 
-const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
 const LAST_SEEN_WRITE_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -13,19 +13,14 @@ export async function createSession(
 	clientId: string | null = null
 ): Promise<{ token: string; expiresAt: number }> {
 	const now = Date.now();
-	// Opportunistic cleanup of abandoned sessions; there is no cron.
-	await db.delete(sessions).where(lt(sessions.expiresAt, now));
 	const token = randomBase32(20);
 	const id = await sha256Hex(token);
 	const expiresAt = now + SESSION_LIFETIME_MS;
-	await db.insert(sessions).values({
-		id,
-		cid,
-		clientId,
-		expiresAt,
-		createdAt: now,
-		lastSeenAt: now
-	});
+	await db.batch([
+		// Opportunistic cleanup of abandoned sessions; there is no cron.
+		db.delete(sessions).where(lt(sessions.expiresAt, now)),
+		db.insert(sessions).values({ id, cid, clientId, expiresAt, createdAt: now, lastSeenAt: now })
+	]);
 	return { token, expiresAt };
 }
 

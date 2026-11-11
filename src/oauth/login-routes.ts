@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { makeDb } from '../db';
 import { exchangeCodeForToken, fetchVatsimProfile } from './vatsim';
 import {
+	SESSION_LIFETIME_MS,
 	createSession,
 	deleteAllSessionsForUser,
 	findSessionByToken,
@@ -20,8 +21,6 @@ import { clearLegacySessionCookie } from './legacy-cookie';
 // Only /login/callback lives here: it is the redirect URI registered with
 // VATSIM Connect. Logins start at GET /oauth/authorize (src/oauth/routes.ts).
 export const loginRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
-
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 // The authorize request /oauth/authorize stored in __Host-oauth_return. Its
 // redirectUri is re-checked against the client in the handler.
@@ -85,12 +84,7 @@ loginRoutes.get('/callback', async (c) => {
 	// is left with no half-applied session or state cookies.
 	const { redirectUri, clientId, state } = authorizeRequest;
 	logEvent('login', { cid: user.cid, client_id: clientId, via: 'vatsim' });
-	const { code: authorizationCode } = await createAuthorizationCode(
-		db,
-		user.cid,
-		redirectUri,
-		clientId
-	);
+	const authorizationCode = await createAuthorizationCode(db, user.cid, redirectUri, clientId);
 
 	// identity's own session: lets /oauth/authorize skip VATSIM next time.
 	const { token } = await createSession(db, user.cid);
@@ -98,7 +92,7 @@ loginRoutes.get('/callback', async (c) => {
 		prefix: 'host',
 		httpOnly: true,
 		sameSite: 'Lax',
-		maxAge: SESSION_MAX_AGE_SECONDS
+		maxAge: SESSION_LIFETIME_MS / 1000
 	});
 	deleteCookie(c, 'oauth_state', { prefix: 'host' });
 	deleteCookie(c, 'oauth_return', { prefix: 'host' });

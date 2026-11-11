@@ -30,7 +30,7 @@ async function seedCode(
 ): Promise<{ cid: string; code: string }> {
 	const db = makeDb(env.DB);
 	const { cid } = await upsertFromVatsim(db, makeVatsimProfile({ cid: '1' }));
-	const { code } = await createAuthorizationCode(db, cid, redirectUri, clientId);
+	const code = await createAuthorizationCode(db, cid, redirectUri, clientId);
 	return { cid, code };
 }
 

@@ -1,11 +1,4 @@
-// npm run client -- create <id> [--scope <scope>]… [--redirect-uri <url>]… [--local]
-// npm run client -- update <id> [--scope <scope>]… [--redirect-uri <url>]… [--local]
-// npm run client -- rotate <id> [--local]
-// npm run client -- delete <id> [--local | --yes]
-// npm run client -- list [--local]
-// npm run role   -- grant|revoke <cid> <role> [--local]
-//
-// Runs SQL against id_db through wrangler (remote by default), so it needs
+// `npm run client` and `npm run role` (see USAGE below). Runs SQL against id_db through wrangler (remote by default), so it needs
 // Cloudflare access. Secrets are printed once and never stored in plaintext.
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';

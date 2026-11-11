@@ -33,7 +33,7 @@ describe('authorization codes', () => {
 	it('stores only the hash of the code, with the redirect URI', async () => {
 		const db = makeDb(env.DB);
 		const cid = await seedUser();
-		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
+		const code = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 		expect(code).toMatch(/^[a-z2-7]{32}$/);
 		const rows = await db.select().from(authorizationCodes).all();
 		expect(rows).toHaveLength(1);
@@ -53,7 +53,7 @@ describe('authorization codes', () => {
 	it('exchanges a code for a valid session exactly once', async () => {
 		const db = makeDb(env.DB);
 		const cid = await seedUser();
-		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
+		const code = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 
 		const first = await exchangeAuthorizationCode(db, code, REDIRECT, 'charts');
 		expect(first).not.toBeNull();
@@ -66,7 +66,7 @@ describe('authorization codes', () => {
 	it('rejects a mismatched redirect URI and consumes the code', async () => {
 		const db = makeDb(env.DB);
 		const cid = await seedUser();
-		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
+		const code = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 
 		expect(
 			await exchangeAuthorizationCode(db, code, 'http://localhost:5173/', 'charts')
@@ -79,7 +79,7 @@ describe('authorization codes', () => {
 	it('rejects a code redeemed by a different client', async () => {
 		const db = makeDb(env.DB);
 		const cid = await seedUser();
-		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
+		const code = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 		expect(await exchangeAuthorizationCode(db, code, REDIRECT, 'moodle')).toBeNull();
 		expect(await db.select().from(sessions).all()).toHaveLength(0);
 	});
@@ -92,7 +92,7 @@ describe('authorization codes', () => {
 	it('rejects a code for a user disabled since it was issued, and creates no session', async () => {
 		const db = makeDb(env.DB);
 		const cid = await seedUser();
-		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
+		const code = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 		await setUserActive(db, cid, false, { reason: 'test' });
 
 		expect(await exchangeAuthorizationCode(db, code, REDIRECT, 'charts')).toBeNull();
@@ -102,7 +102,7 @@ describe('authorization codes', () => {
 	it('rejects an expired code and prunes it', async () => {
 		const db = makeDb(env.DB);
 		const cid = await seedUser();
-		const { code } = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
+		const code = await createAuthorizationCode(db, cid, REDIRECT, 'charts');
 
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(Date.now() + AUTHORIZATION_CODE_LIFETIME_MS + 1000);

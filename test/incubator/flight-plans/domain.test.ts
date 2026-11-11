@@ -4,7 +4,7 @@ import {
 	ensureFresh,
 	getFlightPlan
 } from '../../../src/incubator/flight-plans/domain';
-import type { Pilot, FlightPlan } from '../../../src/incubator/flight-plans/types';
+import type { Pilot, FlightPlan } from '../../../src/incubator/flight-plans/schema';
 
 function makeFlightPlan(overrides: Partial<FlightPlan> = {}): FlightPlan {
 	return {

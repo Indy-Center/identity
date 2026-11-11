@@ -6,8 +6,8 @@ import { setUserActive, updateProfile, upsertFromVatsim } from '../../src/users/
 import { createSession } from '../../src/sessions/domain';
 import { __resetCacheForTests } from '../../src/incubator/presence/domain';
 import { __resetCacheForTests as __resetFlightPlansForTests } from '../../src/incubator/flight-plans/domain';
-import type { OnlineController } from '../../src/incubator/presence/types';
-import type { FlightPlan } from '../../src/incubator/flight-plans/types';
+import type { OnlineController } from '../../src/incubator/presence/schema';
+import type { FlightPlan } from '../../src/incubator/flight-plans/schema';
 import { issueClientToken } from '../../src/clients/domain';
 import { makeVatsimProfile, seedClient } from '../helpers/fixtures';
 

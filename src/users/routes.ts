@@ -115,8 +115,10 @@ userRoutes.get(
 			);
 			return c.json(await Promise.all(found.map((u) => claimsFor(db, u))));
 		}
-		const found = await listUsers(db, { role: q.role });
-		const roles = await listRolesOfHolders(db, q.role);
+		const [found, roles] = await Promise.all([
+			listUsers(db, { role: q.role }),
+			listRolesOfHolders(db, q.role)
+		]);
 		return c.json(found.map((u) => toClaims(u, roles.get(u.cid) ?? [])));
 	}
 );
@@ -231,11 +233,7 @@ userRoutes.patch(
 			throw new IdentityError('access_denied', 403, '/api/me requires a user token');
 		}
 		const db = makeDb(c.env.DB);
-		const body = c.req.valid('json');
-		const user = await updateProfile(db, p.cid, {
-			preferredName: body.preferred_name,
-			pronouns: body.pronouns
-		});
+		const user = await updateProfile(db, p.cid, toProfilePatch(c.req.valid('json')));
 		// The one /api response with email: the caller's own record.
 		return c.json({ ...(await claimsFor(db, user)), email: user.email });
 	}

@@ -1,6 +1,6 @@
 // The pre-OAuth flow set `fic_session` with Domain=.flyindycenter.com so every
-// app could read one shared cookie. Delete this after 2026-11 (30 days past
-// the deploy that replaced it with per-app host-only sessions).
+// app could read one shared cookie. Delete this 30 days after the
+// deploy that replaces it with per-app host-only sessions.
 import type { Context } from 'hono';
 import { deleteCookie } from 'hono/cookie';
 

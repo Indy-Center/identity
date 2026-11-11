@@ -144,17 +144,16 @@ export async function issueClientToken(
 	scopes: Scope[]
 ): Promise<{ token: string; expiresIn: number; scopes: Scope[] }> {
 	const now = Date.now();
-	// Opportunistic cleanup of expired tokens (there is no cron), done here so
-	// validation, which runs on every /api request, stays a pure read.
-	await db.delete(clientTokens).where(lt(clientTokens.expiresAt, now));
 	const token = randomBase32(20);
-	await db.insert(clientTokens).values({
-		id: await sha256Hex(token),
-		clientId,
-		scopes,
-		expiresAt: now + CLIENT_TOKEN_LIFETIME_MS,
-		createdAt: now
-	});
+	const id = await sha256Hex(token);
+	await db.batch([
+		// Opportunistic cleanup of expired tokens (there is no cron), done here so
+		// validation, which runs on every /api request, stays a pure read.
+		db.delete(clientTokens).where(lt(clientTokens.expiresAt, now)),
+		db
+			.insert(clientTokens)
+			.values({ id, clientId, scopes, expiresAt: now + CLIENT_TOKEN_LIFETIME_MS, createdAt: now })
+	]);
 	return { token, expiresIn: CLIENT_TOKEN_LIFETIME_MS / 1000, scopes };
 }
 

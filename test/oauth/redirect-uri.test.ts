@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
 	buildRedirectWithCode,
-	isAllowedOrigin,
 	isAllowedRedirectUri,
 	validateReturnUrl
 } from '../../src/oauth/redirect-uri';
@@ -59,19 +58,19 @@ describe('isAllowedRedirectUri', () => {
 	});
 });
 
-describe('isAllowedOrigin', () => {
+describe('isAllowedRedirectUri for CORS origins', () => {
 	it('allows bare production and loopback origins', () => {
-		expect(isAllowedOrigin('https://charts.flyindycenter.com')).toBe(true);
-		expect(isAllowedOrigin('https://flyindycenter.com')).toBe(true);
-		expect(isAllowedOrigin('http://localhost:5173')).toBe(true);
-		expect(isAllowedOrigin('http://[::1]:3000')).toBe(true);
+		expect(isAllowedRedirectUri('https://charts.flyindycenter.com')).toBe(true);
+		expect(isAllowedRedirectUri('https://flyindycenter.com')).toBe(true);
+		expect(isAllowedRedirectUri('http://localhost:5173')).toBe(true);
+		expect(isAllowedRedirectUri('http://[::1]:3000')).toBe(true);
 	});
 
 	it('rejects everything else', () => {
-		expect(isAllowedOrigin('https://evil.com')).toBe(false);
-		expect(isAllowedOrigin('https://flyindycenter.com.evil.com')).toBe(false);
-		expect(isAllowedOrigin('http://charts.flyindycenter.com')).toBe(false);
-		expect(isAllowedOrigin('')).toBe(false);
+		expect(isAllowedRedirectUri('https://evil.com')).toBe(false);
+		expect(isAllowedRedirectUri('https://flyindycenter.com.evil.com')).toBe(false);
+		expect(isAllowedRedirectUri('http://charts.flyindycenter.com')).toBe(false);
+		expect(isAllowedRedirectUri('')).toBe(false);
 	});
 });
 

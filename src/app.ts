@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { openAPIRouteHandler } from 'hono-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
@@ -10,11 +10,13 @@ import { authorizationServerMetadata } from './oauth/metadata';
 import { apiRoutes } from './api/routes';
 import { defaultValidationErrorResponse, errorSchemas } from './openapi';
 
-const DOCS_CACHE = 'public, max-age=300';
+const cacheDocs: MiddlewareHandler = async (c, next) => {
+	await next();
+	c.header('Cache-Control', 'public, max-age=300');
+};
 
 // Pinned to the @scalar/api-reference release that shipped alongside the
-// installed @scalar/hono-api-reference@0.12.6 (both from the same release,
-// per npm publish times). A `cdn` URL also selects the single-file UMD
+// installed @scalar/hono-api-reference@0.12.6. A `cdn` URL also selects the single-file UMD
 // bundle over the default code-split ESM build, which is what keeps the CSP
 // below free of 'strict-dynamic' or per-chunk allowlisting.
 const SCALAR_CDN = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.1';
@@ -25,22 +27,18 @@ export function buildApp() {
 	app.notFound(notFoundHandler);
 	app.get('/healthz', (c) => c.json({ ok: true }));
 	// Public and the same for every caller, so any origin may read it.
-	app.get('/.well-known/oauth-authorization-server', cors(), (c) => {
-		c.header('Cache-Control', DOCS_CACHE);
-		return c.json(authorizationServerMetadata(new URL(c.req.url).origin));
-	});
+	app.get('/.well-known/oauth-authorization-server', cors(), cacheDocs, (c) =>
+		c.json(authorizationServerMetadata(new URL(c.req.url).origin))
+	);
 	app.route('/oauth', oauthRoutes);
 	app.route('/login', loginRoutes);
 	app.route('/logout', logoutRoutes);
 	app.route('/me', meRoutes);
 	app.route('/api', apiRoutes);
 
-	app.use('/openapi.json', async (c, next) => {
-		await next();
-		c.header('Cache-Control', DOCS_CACHE);
-	});
 	app.get(
 		'/openapi.json',
+		cacheDocs,
 		openAPIRouteHandler(app, {
 			documentation: {
 				info: {
@@ -62,10 +60,6 @@ export function buildApp() {
 				}
 			},
 			defaultValidationErrorResponse
-			// No exclude list needed: hono-openapi only lists routes carrying a
-			// describeRoute()/validate() marker, and /healthz, /openapi.json,
-			// /docs, /login/callback and /logout carry none — verified by
-			// asserting their absence in test/docs.test.ts.
 		})
 	);
 	// CSP scoped to /docs only: the rest of the API returns JSON, not HTML, so
@@ -89,10 +83,7 @@ export function buildApp() {
 	);
 	app.get(
 		'/docs',
-		async (c, next) => {
-			await next();
-			c.header('Cache-Control', DOCS_CACHE);
-		},
+		cacheDocs,
 		Scalar({
 			url: '/openapi.json',
 			pageTitle: 'identity API',

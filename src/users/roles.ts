@@ -6,7 +6,6 @@ import { userRoles } from '../schema';
 import { IdentityError } from '../errors';
 import { ROLE_NAME } from './role-name';
 
-// `app:permission`, e.g. events:can_sign_up (pattern in role-name.ts).
 export const RoleNameSchema = z.string().regex(ROLE_NAME);
 
 // remove also accepts `*` (everything the caller granted) or `app:*` (a namespace).

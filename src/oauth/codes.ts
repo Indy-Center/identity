@@ -12,19 +12,18 @@ export async function createAuthorizationCode(
 	cid: string,
 	redirectUri: string,
 	clientId: string
-): Promise<{ code: string; expiresAt: number }> {
+): Promise<string> {
 	const now = Date.now();
 	const code = randomBase32(20);
-	const expiresAt = now + AUTHORIZATION_CODE_LIFETIME_MS;
 	await db.insert(authorizationCodes).values({
 		id: await sha256Hex(code),
 		cid,
 		clientId,
 		redirectUri,
-		expiresAt,
+		expiresAt: now + AUTHORIZATION_CODE_LIFETIME_MS,
 		createdAt: now
 	});
-	return { code, expiresAt };
+	return code;
 }
 
 /**
@@ -40,13 +39,13 @@ export async function exchangeAuthorizationCode(
 	clientId: string
 ): Promise<{ token: string; expiresAt: number; cid: string } | null> {
 	const now = Date.now();
-	// Opportunistic cleanup; there is no cron.
-	await db.delete(authorizationCodes).where(lt(authorizationCodes.expiresAt, now));
-	// DELETE … RETURNING makes the consume atomic: only one caller gets the row.
-	const [row] = await db
-		.delete(authorizationCodes)
-		.where(eq(authorizationCodes.id, await sha256Hex(code)))
-		.returning();
+	const id = await sha256Hex(code);
+	const [[row]] = await db.batch([
+		// DELETE … RETURNING makes the consume atomic: only one caller gets the row.
+		db.delete(authorizationCodes).where(eq(authorizationCodes.id, id)).returning(),
+		// Opportunistic cleanup; there is no cron.
+		db.delete(authorizationCodes).where(lt(authorizationCodes.expiresAt, now))
+	]);
 	if (!row || row.expiresAt < now || row.redirectUri !== redirectUri || row.clientId !== clientId) {
 		return null;
 	}

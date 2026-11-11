@@ -4,7 +4,7 @@ import {
 	ensureFresh,
 	getActiveSession
 } from '../../../src/incubator/presence/domain';
-import type { OnlineController } from '../../../src/incubator/presence/types';
+import type { OnlineController } from '../../../src/incubator/presence/schema';
 
 function makeController(overrides: Partial<OnlineController> = {}): OnlineController {
 	return {

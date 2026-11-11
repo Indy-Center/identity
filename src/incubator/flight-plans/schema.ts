@@ -29,6 +29,9 @@ export const PilotSchema = z.looseObject({
 	flight_plan: FlightPlanSchema.nullable().optional()
 });
 
+export type FlightPlan = z.infer<typeof FlightPlanSchema>;
+export type Pilot = z.infer<typeof PilotSchema>;
+
 export const VatsimDataFeedSchema = z.looseObject({
 	pilots: z.array(PilotSchema),
 	// Plans filed by members who are not connected yet. Same shape as a pilot.
